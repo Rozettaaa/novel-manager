@@ -461,6 +461,32 @@
 
   /* ---------- Dashboard ---------- */
   const charts = {};
+
+  // plugin: เขียนค่าบนหัวแท่งกราฟทุกแท่ง (ไม่ต้องเทียบแกน)
+  const barValueLabel = {
+    id: "barValueLabel",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const color = (getComputedStyle(document.documentElement).getPropertyValue("--text").trim()) || "#333";
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach((bar, i) => {
+          const v = ds.data[i];
+          if (v == null || v === 0) return;
+          ctx.save();
+          ctx.fillStyle = color;
+          ctx.font = "600 11px Sarabun, 'Segoe UI', sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(Number(v).toLocaleString(), bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      });
+    },
+  };
+  if (window.Chart) Chart.register(barValueLabel);
+
   function makeChart(canvasId, label, color, yUnit) {
     const ctx = $(canvasId);
     return new Chart(ctx, {
@@ -468,6 +494,8 @@
       data: { labels: [], datasets: [{ label, data: [], backgroundColor: color, borderRadius: 6, maxBarThickness: 46 }] },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 22 } },   // เผื่อที่ให้ตัวเลขบนหัวแท่งสูงสุด
         plugins: { legend: { display: false } },
         scales: {
           y: {
@@ -588,13 +616,14 @@
       $("sumWords").textContent = agg.totalWords.toLocaleString() + " คำ";
       $("sumSpeed").textContent = (agg.totalMinutes > 0 ? agg.totalWords / agg.totalMinutes : 0).toFixed(1) + " คำ/นาที";
       renderHeatmap(agg.dailyDelta, heatRange());
-      ensureCharts();
-      charts.daily.data.labels = agg.daily.labels.map((d) => d.slice(5));
-      charts.daily.data.datasets[0].data = agg.daily.data; charts.daily.update();
-      charts.file.data.labels = agg.file.labels; charts.file.data.datasets[0].data = agg.file.data; charts.file.update();
-      charts.hours.data.labels = agg.hours.labels; charts.hours.data.datasets[0].data = agg.hours.data; charts.hours.update();
+      // โชว์ container ก่อนสร้าง/อัปเดตกราฟ เพื่อให้ canvas มีขนาด (ไม่งั้นกราฟสูง 0)
       $("dashEmpty").style.display = "none";
       $("dashContent").hidden = false;
+      ensureCharts();
+      charts.daily.data.labels = agg.daily.labels.map((d) => d.slice(5));
+      charts.daily.data.datasets[0].data = agg.daily.data; charts.daily.resize(); charts.daily.update();
+      charts.file.data.labels = agg.file.labels; charts.file.data.datasets[0].data = agg.file.data; charts.file.resize(); charts.file.update();
+      charts.hours.data.labels = agg.hours.labels; charts.hours.data.datasets[0].data = agg.hours.data; charts.hours.resize(); charts.hours.update();
     } catch (e) {
       console.error(e);
       $("dashEmpty").textContent = "โหลดสถิติไม่สำเร็จ: " + (e.message || e);
@@ -726,10 +755,10 @@
     }
     fsCharts.words.data.labels = labels;
     fsCharts.words.data.datasets[0].data = wordsData;
-    fsCharts.words.update();
+    fsCharts.words.resize(); fsCharts.words.update();
     fsCharts.time.data.labels = labels;
     fsCharts.time.data.datasets[0].data = timeData;
-    fsCharts.time.update();
+    fsCharts.time.resize(); fsCharts.time.update();
   }
   if ($("fileStatsBtn")) $("fileStatsBtn").addEventListener("click", toggleFileStats);
 

@@ -28,7 +28,9 @@
 
   let tokenClient = null;
   let accessToken = null;
+  let tokenExpiry = 0;
   let connected = false;
+  const TOKEN_KEY = "wt_token";
   let currentEmail = null;
 
   const statusEl = () => document.getElementById("gStatus");
@@ -42,26 +44,41 @@
   const sheetKey = () => "wt_sheet_id::" + (currentEmail || "default");
 
   /* ---------- OAuth ---------- */
+  let _resolveTok = null, _rejectTok = null;
+  function _clearTok() { _resolveTok = null; _rejectTok = null; }
   function ensureTokenClient() {
     if (tokenClient) return true;
     if (typeof google === "undefined" || !google.accounts || !google.accounts.oauth2) return false;
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CFG.CLIENT_ID,
       scope: SCOPES,
-      callback: () => {},
+      callback: (resp) => {
+        if (resp && resp.error) { if (_rejectTok) { _rejectTok(resp); _clearTok(); } return; }
+        accessToken = resp.access_token;
+        tokenExpiry = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
+        try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ t: accessToken, e: tokenExpiry })); } catch (e) {}
+        if (_resolveTok) { _resolveTok(accessToken); _clearTok(); }
+      },
+      // ยิงเมื่อ silent ล้มเหลว (เช่น ยังไม่ได้ login google / ไม่เคยอนุญาต)
+      error_callback: (err) => { if (_rejectTok) { _rejectTok(err || new Error("auth error")); _clearTok(); } },
     });
     return true;
   }
-  function getToken(promptMode) {
+  // promptMode: "" (เงียบ) | "consent" | "select_account" ; timeoutMs > 0 = ตัดจบถ้าค้าง (ใช้ตอน silent)
+  function getToken(promptMode, timeoutMs) {
     return new Promise((resolve, reject) => {
       if (!ensureTokenClient()) { reject(new Error("ยังโหลด Google Identity Services ไม่เสร็จ")); return; }
-      tokenClient.callback = (resp) => {
-        if (resp && resp.error) { reject(resp); return; }
-        accessToken = resp.access_token;
-        resolve(accessToken);
-      };
-      tokenClient.requestAccessToken({ prompt: promptMode || "" });
+      _resolveTok = resolve; _rejectTok = reject;
+      try { tokenClient.requestAccessToken({ prompt: promptMode || "" }); }
+      catch (e) { if (_rejectTok) { _rejectTok(e); _clearTok(); } return; }
+      if (timeoutMs) setTimeout(() => { if (_rejectTok) { _rejectTok(new Error("silent timeout")); _clearTok(); } }, timeoutMs);
     });
+  }
+  function waitGisReady(cb, n) {
+    n = n || 0;
+    if (typeof google !== "undefined" && google.accounts && google.accounts.oauth2) return cb();
+    if (n > 50) return;  // รอ ~5 วิ
+    setTimeout(() => waitGisReady(cb, n + 1), 100);
   }
 
   /* ---------- fetch helper ---------- */
@@ -70,7 +87,7 @@
     if (allowRetry === undefined) allowRetry = true;
     const headers = Object.assign({}, opts.headers || {}, { Authorization: "Bearer " + accessToken });
     const res = await fetch(url, Object.assign({}, opts, { headers }));
-    if (res.status === 401 && allowRetry) { await getToken(""); return apiFetch(url, opts, false); }
+    if (res.status === 401 && allowRetry) { await getToken("", 8000); return apiFetch(url, opts, false); }
     if (!res.ok) { throw new Error(res.status + " " + (await res.text())); }
     return res.status === 204 ? null : res.json();
   }
@@ -460,18 +477,22 @@
   }
 
   /* ---------- เชื่อมต่อ / เปลี่ยนบัญชี ---------- */
+  function markConnected() {
+    connected = true;
+    document.getElementById("connectBtn").textContent = "เชื่อมต่อแล้ว ✓";
+    const sb = document.getElementById("switchBtn");
+    if (sb) sb.style.display = "";
+  }
+
   async function connect(promptMode) {
     if (!validClientId()) { alert("ยังไม่ได้ใส่ CLIENT_ID ใน config.js"); return; }
     try {
       setStatus("กำลังขออนุญาต...");
       await getToken(promptMode || "consent");
       currentEmail = await fetchUserEmail();
-      connected = true;
       await ensureSheet();
+      markConnected();
       setStatus("เชื่อมต่อแล้ว · " + (currentEmail || ""));
-      document.getElementById("connectBtn").textContent = "เชื่อมต่อแล้ว ✓";
-      const sb = document.getElementById("switchBtn");
-      if (sb) sb.style.display = "";
       if (window.UI && window.UI.onConnected) window.UI.onConnected();
     } catch (e) {
       console.error("connect error:", e);
@@ -480,8 +501,35 @@
       setStatus("เชื่อมต่อไม่สำเร็จ: " + msg.slice(0, 200), true);
     }
   }
+
+  // กู้ session จาก token ที่เก็บไว้ (ตอนเปิด/รีเฟรช) — ไม่เด้ง popup
+  async function restoreSession() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(TOKEN_KEY)); } catch (e) {}
+    if (!saved || !saved.t || !saved.e || saved.e - Date.now() < 60000) {
+      setStatus("ยังไม่เชื่อมต่อ Google");
+      return;
+    }
+    accessToken = saved.t; tokenExpiry = saved.e;
+    setStatus("กำลังเชื่อมต่อกลับ...");
+    try {
+      // ตรวจ token ด้วย userinfo แบบ "ไม่ retry" → ถ้า token เสียจะ throw เฉยๆ ไม่เด้ง popup
+      const info = await apiFetch("https://www.googleapis.com/oauth2/v3/userinfo", {}, false);
+      currentEmail = info && info.email;
+      if (!currentEmail) throw new Error("token ใช้ไม่ได้");
+      await ensureSheet();
+      markConnected();
+      setStatus("เชื่อมต่อแล้ว · " + currentEmail);
+      if (window.UI && window.UI.onConnected) window.UI.onConnected();
+    } catch (e) {
+      accessToken = null; connected = false;
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e2) {}
+      setStatus("ยังไม่เชื่อมต่อ Google");
+    }
+  }
   async function switchAccount() {
     accessToken = null; connected = false; currentEmail = null;
+    try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(sheetKey()); } catch (e) {}
     setStatus("กำลังเปลี่ยนบัญชี...");
     await connect("select_account");
   }
@@ -502,6 +550,8 @@
     if (cb) cb.addEventListener("click", () => connect("consent"));
     const sb = document.getElementById("switchBtn");
     if (sb) sb.addEventListener("click", switchAccount);
-    setStatus(validClientId() ? "ยังไม่เชื่อมต่อ Google" : "ยังไม่ได้ตั้งค่า CLIENT_ID");
+    // กู้ session จาก token ที่เก็บไว้ (รีเฟรช/เปิดใหม่ภายในอายุ token → ต่อเองไม่ต้องกด ไม่มี popup)
+    if (validClientId()) restoreSession();
+    else setStatus("ยังไม่ได้ตั้งค่า CLIENT_ID");
   });
 })();
