@@ -1,0 +1,10 @@
+# เครื่องมือ/แคชที่ไม่เกี่ยวกับเว็บ
+.deepeval/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/

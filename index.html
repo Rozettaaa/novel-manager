@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novel Manager</title>
+<link rel="stylesheet" href="style.css?v=11">
+<script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <button class="brand" id="brandHome" title="หน้าแรก">📖 <span>Novel Manager</span></button>
+      <button class="collapse-btn" id="collapseBtn" title="ย่อ/ขยายเมนู">«</button>
+    </div>
+
+    <button class="nav-item active" data-view="write" title="Writing">✍️ <span>Writing</span></button>
+    <button class="nav-item" data-view="dashboard" title="Dashboard">📊 <span>Dashboard</span></button>
+
+    <div class="sidebar-foot">
+      <div class="menu-root theme-menu-root">
+        <button id="themeBtn" class="theme-btn">🎨 <span id="themeBtnLabel">ค่าเริ่มต้น</span> <span class="caret">▾</span></button>
+        <div id="themeMenu" class="menu-content theme-menu" hidden>
+          <button class="menu-item" data-theme="default">ค่าเริ่มต้น</button>
+          <button class="menu-item" data-theme="wood">ไม้/เบจอ่อน</button>
+          <button class="menu-item" data-theme="dark">มืด (Dark)</button>
+          <button class="menu-item" data-theme="green">เขียวคลีน</button>
+        </div>
+      </div>
+      <div id="gStatus" class="g-status">ยังไม่เชื่อมต่อ Google</div>
+      <button id="connectBtn" class="tool-btn-wide">เชื่อมต่อ Google</button>
+      <button id="switchBtn" class="tool-btn-wide" style="display:none">เปลี่ยนบัญชี</button>
+    </div>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main class="content">
+
+    <!-- headbar: หัวข้อของเมนูปัจจุบัน -->
+    <header class="headbar"><h1 id="headbarTitle">Writing</h1></header>
+
+    <!-- ---------- WRITE VIEW ---------- -->
+    <section id="view-write" class="view active">
+
+      <!-- แถบจับเวลา Sprint (ลอยติดบนสุดเวลาเลื่อน) -->
+      <div id="sprintActive" class="sprint-sticky" hidden>
+        <span class="sprint-clock" id="sprintCountdown">00:00</span>
+        <span class="sprint-live">เขียนแล้ว <b id="sprintLiveWords">0</b> / เป้า <b id="sprintTargetShow">0</b> คำ</span>
+        <div class="sprint-bar"><div id="sprintBarFill" class="sprint-bar-fill"></div></div>
+        <button id="sprintStopBtn" class="ghost-btn small">หยุด &amp; สรุป</button>
+      </div>
+
+      <!-- picker: เลือกโฟลเดอร์ → ไฟล์ -->
+      <div id="writePicker" class="picker">
+        <h2 class="page-title">เลือกเรื่องที่จะเขียน</h2>
+        <div id="breadcrumb" class="breadcrumb"></div>
+        <div class="picker-bar">
+          <div id="folderFilter" class="seg" style="display:none">
+            <button class="seg-btn active" data-filter="mine">ไดรฟ์ของฉัน</button>
+            <button class="seg-btn" data-filter="shared">แชร์กับฉัน</button>
+          </div>
+          <div class="picker-bar-actions">
+            <div class="menu-root">
+              <button id="addBtn" class="ghost-btn small" style="display:none" title="เพิ่มใหม่">+</button>
+              <div id="createMenu" class="menu-content" hidden>
+                <button class="menu-item" id="newFolderBtn">📁 โฟลเดอร์ใหม่</button>
+                <button class="menu-item" id="newDocBtn">📄 ไฟล์ Doc ใหม่</button>
+              </div>
+            </div>
+            <button id="folderGoalBtn" class="ghost-btn small" style="display:none">🎯 เลือก</button>
+            <button id="pickerSelectBtn" class="ghost-btn small" style="display:none">Detail</button>
+          </div>
+        </div>
+
+        <!-- เป้าการเขียนของโฟลเดอร์นี้ -->
+        <div id="folderGoalPanel" class="goal-panel" hidden>
+          <div id="goalSetup" class="goal-setup">
+            <strong>ตั้งเป้าการเขียนของโฟลเดอร์นี้</strong>
+            <label>เป้าจำนวนคำ <input type="number" id="goalWords" min="1" step="100" value="50000"></label>
+            <label>ภายใน (วัน) <input type="number" id="goalDays" min="1" value="30"></label>
+            <button id="goalSetBtn" class="primary-btn">ตั้งเป้า</button>
+          </div>
+          <div id="goalActive" class="goal-active" hidden>
+            <div class="goal-head">
+              <b id="goalTitle">เป้า</b>
+              <span class="goal-actions">
+                <button id="goalRecountBtn" class="ghost-btn small">นับคำใหม่</button>
+                <button id="goalEditBtn" class="ghost-btn small">แก้ไข</button>
+                <button id="goalDelBtn" class="ghost-btn small">ลบเป้า</button>
+              </span>
+            </div>
+            <div class="goal-bar"><div id="goalBarFill" class="goal-bar-fill"></div></div>
+            <div class="goal-meta" id="goalMeta">–</div>
+          </div>
+        </div>
+
+        <div id="pickerHint" class="picker-hint">เชื่อมต่อ Google ก่อนเพื่อโหลดโฟลเดอร์จาก Drive</div>
+        <div id="pickerList" class="picker-list"></div>
+      </div>
+
+      <!-- editor -->
+      <div id="writeEditor" class="editor-wrap" hidden>
+        <div class="editor-head">
+          <button id="backBtn" class="ghost-btn small">← กลับ</button>
+          <div id="fileTitle" class="file-title">—</div>
+          <div class="editor-head-right">
+            <button id="boldBtn" class="tool-btn" title="ตัวหนา (Ctrl+B)"><b>B</b></button>
+            <button id="centerBtn" class="tool-btn" title="จัดกึ่งกลาง">≡</button>
+            <button id="clearBoldBtn" class="ghost-btn small" title="ล้างตัวหนาทั้งไฟล์">ล้างตัวหนา</button>
+            <button id="downloadBtn" class="ghost-btn small">⬇ .docx</button>
+            <button id="saveBtn" class="primary-btn" title="บันทึก (Ctrl+S)">💾 บันทึก</button>
+            <span id="saveStatus" class="save-status">บันทึกแล้ว</span>
+          </div>
+        </div>
+
+        <div class="mini-stats">
+          <span>คำ: <b id="wordCount">0</b></span>
+          <span>ตัวอักษร: <b id="charCount">0</b></span>
+          <span>เวลาวันนี้: <b id="minuteCount">0</b> นาที</span>
+          <span class="mini-stats-actions">
+            <button id="fileStatsBtn" class="ghost-btn small">📊 สถิติไฟล์นี้</button>
+            <button id="sprintBtn" class="ghost-btn small">⏱ ตั้งเป้าเขียน</button>
+          </span>
+        </div>
+
+        <!-- แผงสถิติไฟล์นี้ -->
+        <div id="statsPanel" class="ed-panel" hidden>
+          <div class="ed-panel-head">
+            <span>📊 สถิติไฟล์นี้</span>
+            <button class="ed-panel-close" data-close="statsPanel">✕</button>
+          </div>
+          <div class="fs-summary">
+            <div><span>คำล่าสุด</span><b id="fsTotalWords">–</b></div>
+            <div><span>เวลารวม</span><b id="fsTotalTime">–</b></div>
+            <div><span>ความเร็วเฉลี่ย</span><b id="fsSpeed">–</b></div>
+          </div>
+          <div class="fs-charts">
+            <div class="chart-box"><h3>คำที่เขียนได้ต่อวัน</h3><canvas id="fsChartWords"></canvas></div>
+            <div class="chart-box"><h3>เวลาที่เขียนต่อวัน (นาที)</h3><canvas id="fsChartTime"></canvas></div>
+          </div>
+          <div id="fsHint" class="picker-hint" style="display:none"></div>
+        </div>
+
+        <!-- แผงตั้งเป้าเขียน (Sprint) -->
+        <div id="sprintPanel" class="ed-panel" hidden>
+          <div class="ed-panel-head">
+            <span>⏱ ตั้งเป้าเขียน (Sprint)</span>
+            <button class="ed-panel-close" data-close="sprintPanel">✕</button>
+          </div>
+
+          <div id="sprintSetup" class="sprint-setup">
+            <label>เวลา (นาที) <input type="number" id="sprintMinutes" value="15" min="1" max="240"></label>
+            <label>เป้าจำนวนคำ <input type="number" id="sprintTarget" value="500" min="1" step="10"></label>
+            <button id="sprintStartBtn" class="primary-btn">เริ่ม</button>
+          </div>
+
+          <div id="sprintSummary" class="sprint-summary" hidden></div>
+        </div>
+
+        <div id="editor" class="editor" contenteditable="true"
+             data-placeholder="เริ่มเขียนที่นี่..."></div>
+      </div>
+
+    </section>
+
+    <!-- ---------- DASHBOARD VIEW ---------- -->
+    <section id="view-dashboard" class="view">
+
+      <div class="picker-bar">
+        <div id="dashFilter" class="seg">
+          <button class="seg-btn active" data-filter="mine">ไดรฟ์ของฉัน</button>
+          <button class="seg-btn" data-filter="shared">แชร์กับฉัน</button>
+        </div>
+        <button id="dashDetailBtn" class="ghost-btn small" style="margin-left:auto">Detail</button>
+      </div>
+      <div id="dashBreadcrumb" class="breadcrumb"></div>
+      <div id="dashFolders" class="dash-folders"></div>
+
+      <div id="dashEmpty" class="picker-hint">เลือกโฟลเดอร์เพื่อดูสถิติ</div>
+
+      <div id="dashContent" hidden>
+        <!-- สรุปตัวเลขรวมของโฟลเดอร์ -->
+        <div class="dash-summary">
+          <div class="sum-card"><span>เวลาที่ใช้เขียนรวม</span><b id="sumTime">–</b></div>
+          <div class="sum-card"><span>เขียนไปแล้ว</span><b id="sumWords">–</b></div>
+          <div class="sum-card"><span>ความเร็วเฉลี่ย</span><b id="sumSpeed">–</b></div>
+        </div>
+
+        <!-- heatmap -->
+        <div class="chart-box">
+          <div class="heatmap-head">
+            <h3>ความถี่การเขียนรายวัน</h3>
+            <div class="heatmap-toolbar">
+              <select id="heatmapRange">
+                <option value="112">16 สัปดาห์</option>
+                <option value="182">6 เดือน</option>
+                <option value="365">1 ปี</option>
+                <option value="0">ทั้งหมด</option>
+              </select>
+              <button id="heatmapExport" class="ghost-btn small">⬇ Export CSV</button>
+            </div>
+          </div>
+          <div id="heatmap" class="heatmap"></div>
+          <div class="heatmap-legend">
+            <span>เขียนน้อย</span>
+            <span class="hm hm-0"></span><span class="hm hm-1"></span><span class="hm hm-2"></span><span class="hm hm-3"></span><span class="hm hm-4"></span>
+            <span>เขียนเยอะ</span>
+          </div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="chart-box">
+            <h3>จำนวนคำที่เขียนได้ต่อวัน</h3>
+            <canvas id="chartDaily"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>จำนวนคำของแต่ละไฟล์</h3>
+            <canvas id="chartFile"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>ชั่วโมงที่ใช้เขียนต่อไฟล์</h3>
+            <canvas id="chartHours"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js?v=11"></script>
+<script src="app.js?v=11"></script>
+<script src="google.js?v=11"></script>
+<script src="ui.js?v=11"></script>
+</body>
+</html>
