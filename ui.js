@@ -264,11 +264,17 @@
     renderPickerList();
   });
 
-  /* ---------- เป้าการเขียนระดับโฟลเดอร์ ---------- */
-  const goalKey = (fid) => "wt_goal::" + fid;
-  const getGoal = (fid) => { try { return JSON.parse(localStorage.getItem(goalKey(fid))); } catch { return null; } };
-  const setGoal = (fid, g) => localStorage.setItem(goalKey(fid), JSON.stringify(g));
-  const delGoal = (fid) => localStorage.removeItem(goalKey(fid));
+  /* ---------- เป้าการเขียนระดับโฟลเดอร์ (เก็บใน Google Sheet ผูกกับบัญชี) ---------- */
+  let goalsMap = {};   // โหลดครั้งเดียวตอนเชื่อมต่อ → cache ในหน่วยความจำ
+  const getGoal = (fid) => goalsMap[fid] || null;
+  function setGoal(fid, g) {
+    goalsMap[fid] = g;
+    if (G() && G().isConnected()) G().saveGoalRow(fid, g).catch((e) => console.error("saveGoal:", e));
+  }
+  function delGoal(fid) {
+    delete goalsMap[fid];
+    if (G() && G().isConnected()) G().deleteGoalRow(fid).catch((e) => console.error("delGoal:", e));
+  }
   const curFid = () => (pathStack.length ? pathStack[pathStack.length - 1].id : null);
 
   function renderGoalForFolder() {
@@ -731,6 +737,11 @@
   window.UI = {
     onConnected: () => {
       dashPath = [];  // รีเซ็ตเบราว์เซอร์ dashboard
+      // โหลดเป้าทั้งหมดจาก Sheet (ผูกบัญชี ข้ามเครื่อง) แล้ว refresh แผงเป้า
+      if (G() && G().loadGoals) {
+        G().loadGoals().then((m) => { goalsMap = m || {}; renderGoalForFolder(); })
+          .catch((e) => console.error("loadGoals:", e));
+      }
       if ($("view-write").classList.contains("active") && $("writeEditor").hidden) showWritePicker();
       if ($("view-dashboard").classList.contains("active")) initDashboard();
     },

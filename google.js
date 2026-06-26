@@ -279,14 +279,34 @@
     }
   }
 
-  /* ---------- Sheets: สถิติรายไฟล์ ---------- */
+  /* ---------- Sheets: สถิติรายไฟล์ (ผูกกับบัญชี ข้ามเครื่องได้) ---------- */
   // schema: A=date B=folder_id C=file_id D=file_name E=word_count F=minutes
+  let goalsTabReady = false;
   async function ensureSheet() {
     let id = localStorage.getItem(sheetKey());
     if (id) return id;
+
+    // 1) ค้นหา Sheet เดิมใน Drive ตามชื่อก่อน (ทำให้เครื่องอื่นเจอชีตเดิม → สถิติไม่หาย)
+    const q = `name = '${CFG.SHEET_TITLE.replace(/'/g, "\\'")}' ` +
+      `and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and 'me' in owners`;
+    try {
+      const found = await apiFetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1&orderBy=createdTime`
+      );
+      if (found && found.files && found.files.length) {
+        id = found.files[0].id;
+        localStorage.setItem(sheetKey(), id);
+        return id;
+      }
+    } catch (e) { console.warn("ค้นหา Sheet เดิมไม่สำเร็จ:", e); }
+
+    // 2) ไม่เจอ → สร้างใหม่ (พร้อม tab stats + goals)
     const ss = await apiFetch(
       "https://sheets.googleapis.com/v4/spreadsheets",
-      jsonPost({ properties: { title: CFG.SHEET_TITLE }, sheets: [{ properties: { title: "stats" } }] })
+      jsonPost({
+        properties: { title: CFG.SHEET_TITLE },
+        sheets: [{ properties: { title: "stats" } }, { properties: { title: "goals" } }],
+      })
     );
     id = ss.spreadsheetId;
     localStorage.setItem(sheetKey(), id);
@@ -294,7 +314,90 @@
       `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/stats!A1:F1?valueInputOption=RAW`,
       jsonPut({ values: [["date", "folder_id", "file_id", "file_name", "word_count", "minutes"]] })
     );
+    await apiFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A1:F1?valueInputOption=RAW`,
+      jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted"]] })
+    );
+    goalsTabReady = true;
     return id;
+  }
+
+  // ทำให้แน่ใจว่ามี tab "goals" (สำหรับชีตเก่าที่สร้างก่อนมีฟีเจอร์เป้า)
+  async function ensureGoalsTab(spreadsheetId) {
+    if (goalsTabReady) return;
+    const meta = await apiFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`
+    );
+    const has = (meta.sheets || []).some((s) => s.properties.title === "goals");
+    if (!has) {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        jsonPost({ requests: [{ addSheet: { properties: { title: "goals" } } }] })
+      );
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/goals!A1:F1?valueInputOption=RAW`,
+        jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted"]] })
+      );
+    }
+    goalsTabReady = true;
+  }
+
+  // โหลดเป้าทั้งหมด (เรียกครั้งเดียวตอนเชื่อมต่อ) → { folderId: {target,days,...} }
+  async function loadGoals() {
+    const id = await ensureSheet();
+    let data;
+    try {
+      data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+      goalsTabReady = true;
+    } catch (e) {
+      await ensureGoalsTab(id);   // ยังไม่มี tab goals
+      return {};
+    }
+    const map = {};
+    (data && data.values || []).forEach((r) => {
+      if (r[0]) map[r[0]] = {
+        target: Number(r[1] || 0), days: Number(r[2] || 0), created: r[3] || "",
+        lastTotal: Number(r[4] || 0), lastCounted: r[5] || "",
+      };
+    });
+    return map;
+  }
+
+  async function saveGoalRow(folderId, g) {
+    const id = await ensureSheet();
+    await ensureGoalsTab(id);
+    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+    const rows = (data && data.values) || [];
+    let rowNum = -1;
+    for (let i = 0; i < rows.length; i++) { if (rows[i][0] === folderId) { rowNum = i + 2; break; } }
+    const values = [[folderId, g.target, g.days, g.created || "", g.lastTotal || 0, g.lastCounted || ""]];
+    if (rowNum > 0) {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A${rowNum}:F${rowNum}?valueInputOption=RAW`,
+        jsonPut({ values })
+      );
+    } else {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A:F:append?valueInputOption=RAW`,
+        jsonPost({ values })
+      );
+    }
+  }
+
+  async function deleteGoalRow(folderId) {
+    const id = await ensureSheet();
+    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+    const remaining = ((data && data.values) || []).filter((r) => r[0] !== folderId);
+    await apiFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F:clear`,
+      jsonPost({})
+    );
+    if (remaining.length) {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2?valueInputOption=RAW`,
+        jsonPut({ values: remaining })
+      );
+    }
   }
 
   async function readRows() {
@@ -391,6 +494,7 @@
     renameFile, trashFile, createFolder, createDoc,
     openDoc, saveDoc,
     upsertStat, getTodayMinutes, getFolderStats, getFileStats,
+    loadGoals, saveGoalRow, deleteGoalRow,
   };
 
   document.addEventListener("DOMContentLoaded", () => {
