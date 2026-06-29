@@ -263,14 +263,25 @@ input[type="text"], input[type="number"], select, .rename-input {
 /* ============ WRITE: editor ============ */
 .editor-wrap {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+  border-radius: 12px; box-shadow: var(--shadow);
 }
+/* แถบเครื่องมือด้านบน ตรึงไว้ (freeze panel) */
 .editor-head {
-  display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 16px; border-bottom: 1px solid var(--border);
+  background: var(--panel); border-radius: 12px 12px 0 0;
 }
-.file-title { font-weight: 700; font-size: 16px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-title { font-weight: 700; font-size: 16px; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-head-right { display: flex; align-items: center; gap: 10px; }
+.editor { border-radius: 0 0 12px 12px; }
+/* progress bar เป้าหมายโฟลเดอร์ มุมบนขวา แสดงตลอดเวลา */
+.ed-folder-goal { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--pill); border-radius: 999px; }
+.efg-label { font-size: 12px; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.efg-label b, .efg-label span { color: var(--text); }
+.efg-bar { width: 90px; height: 7px; background: var(--border); border-radius: 6px; overflow: hidden; }
+.efg-fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.efg-pct { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 32px; text-align: right; }
 .save-status { font-size: 12px; color: #2f9e44; font-weight: 600; }
 .save-status.saving { color: var(--muted); }
 .save-status.error { color: #e03131; }
@@ -354,6 +365,31 @@ input[type="text"], input[type="number"], select, .rename-input {
 .dash-folders.detail .dash-folder { white-space: normal; overflow: visible; text-overflow: clip; }
 .muted-inline { color: var(--muted); font-size: 13px; }
 
+/* dashboard: รวม progress bar ทุกเป้าหมาย */
+.dash-goals { margin-bottom: 24px; }
+.section-title { font-size: 16px; font-weight: 700; margin: 0 0 14px; }
+.dash-goals-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.dg-row {
+  position: relative;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); transition: border-color .15s;
+}
+.dg-row.pinned { border-color: var(--accent); }
+.dg-main { cursor: pointer; padding: 14px 16px; border-radius: 12px; transition: background .15s; }
+.dg-main:hover { background: var(--accent-soft); }
+.dg-pin {
+  position: absolute; top: 7px; right: 7px; z-index: 2;
+  border: none; background: transparent; cursor: pointer; font-size: 14px; line-height: 1;
+  padding: 4px 5px; border-radius: 6px; opacity: .3; filter: grayscale(1);
+}
+.dg-pin:hover { opacity: .7; background: rgba(0,0,0,.06); }
+.dg-pin.on { opacity: 1; filter: none; }
+.dg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; padding-right: 22px; }
+.dg-name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-pct { font-weight: 700; color: var(--accent); flex-shrink: 0; }
+.dg-pct.done { color: #2f9e44; }
+.dg-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
 /* dashboard: สรุปตัวเลข */
 .dash-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
 .sum-card {
@@ -393,3 +429,100 @@ input[type="text"], input[type="number"], select, .rename-input {
 @media (max-width: 820px) {
   .dash-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   MOBILE UI  (เปิดด้วยปุ่มสลับ → html[data-ui="mobile"])
+   ออกแบบให้พอดีจอ iPhone แนวตั้ง และยืดหยุ่นกับจอมือถืออื่น
+   ============================================================ */
+
+/* องค์ประกอบเฉพาะมือถือ ซ่อนไว้ในโหมดเดสก์ท็อป */
+.mobile-nav { display: none; }
+html[data-ui="mobile"] #uiModeBtn { display: none; }   /* ปุ่มสลับอยู่ใน settings sheet แทน */
+
+html[data-ui="mobile"] .app { display: block; }
+html[data-ui="mobile"] .sidebar { display: none; }
+html[data-ui="mobile"] .content {
+  padding: 0 14px calc(78px + env(safe-area-inset-bottom, 0px));
+}
+
+/* headbar กระชับขึ้น */
+html[data-ui="mobile"] .headbar { padding: 14px 0 10px; }
+html[data-ui="mobile"] .headbar h1 { font-size: 20px; }
+
+/* ---------- bottom navbar ---------- */
+html[data-ui="mobile"] .mobile-nav {
+  display: flex;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  background: var(--sidebar);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 -4px 18px rgba(0,0,0,.18);
+}
+.mnav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--sidebar-text); opacity: .7;
+  padding: 7px 4px; border-radius: 12px; font-size: 11px; font-weight: 600;
+}
+.mnav-item .mnav-ico { font-size: 20px; line-height: 1; }
+.mnav-item.active { opacity: 1; color: #fff; background: var(--accent); }
+
+/* ---------- settings bottom-sheet ---------- */
+.m-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(0,0,0,.45);
+}
+.m-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 71;
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--panel); color: var(--text);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+  max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 -8px 30px rgba(0,0,0,.28);
+}
+.m-sheet-grab { width: 42px; height: 5px; border-radius: 3px; background: var(--border); margin: 4px auto 10px; }
+.m-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.m-sheet-head h2 { margin: 0; font-size: 18px; }
+.m-sheet-sec { padding: 12px 0; border-top: 1px solid var(--border); }
+.m-sheet-sec:first-of-type { border-top: none; }
+.m-sheet-sec h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 700; }
+.m-sheet .tool-btn-wide {
+  color: var(--text); border-color: var(--border); background: var(--bg);
+}
+.m-sheet .tool-btn-wide:hover { color: var(--text); border-color: var(--accent); }
+.m-status { font-size: 12px; color: var(--muted); margin-bottom: 10px; word-break: break-all; }
+.m-status.error { color: #e03131; }
+.m-theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.m-theme-opt {
+  padding: 12px 10px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.m-theme-opt.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+
+/* ---------- ปรับเนื้อหาเดิมให้พอดีจอแคบ ---------- */
+html[data-ui="mobile"] .dash-grid,
+html[data-ui="mobile"] .fs-charts { grid-template-columns: 1fr; }
+html[data-ui="mobile"] .dash-summary { grid-template-columns: 1fr; }
+html[data-ui="mobile"] .dash-goals-list { grid-template-columns: 1fr; }
+
+/* แถบเครื่องมือในหน้าเขียน: ปุ่มเล็กลง, progress bar โฟลเดอร์ลงบรรทัดของตัวเอง */
+html[data-ui="mobile"] .editor-head { gap: 8px; padding: 10px 12px; }
+html[data-ui="mobile"] .editor-head-right { gap: 6px; flex-wrap: wrap; }
+html[data-ui="mobile"] .file-title { font-size: 15px; min-width: 80px; }
+html[data-ui="mobile"] .ed-folder-goal { order: 9; flex-basis: 100%; justify-content: space-between; }
+html[data-ui="mobile"] .ed-folder-goal .efg-bar { flex: 1; width: auto; }
+html[data-ui="mobile"] .ed-folder-goal .efg-label { max-width: 45%; }
+html[data-ui="mobile"] .editor { padding: 18px 16px; font-size: 17px; }
+html[data-ui="mobile"] .editor-head-right .ghost-btn.small,
+html[data-ui="mobile"] .editor-head-right .primary-btn { padding: 7px 10px; font-size: 13px; }
+
+/* mini-stats / picker / sprint ให้ห่อบรรทัดได้สวย */
+html[data-ui="mobile"] .mini-stats { gap: 14px; flex-wrap: wrap; padding: 10px 14px; }
+html[data-ui="mobile"] .picker-bar-actions { margin-left: 0; }
+html[data-ui="mobile"] .picker-bar { gap: 8px; }
+html[data-ui="mobile"] .sprint-sticky { flex-wrap: wrap; gap: 10px; }
+html[data-ui="mobile"] .sprint-clock { font-size: 22px; }
+
+/* ทำให้แตะง่ายขึ้นบนมือถือ */
+html[data-ui="mobile"] .pick-item { padding-top: 14px; padding-bottom: 14px; }

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webniyay",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "D:/webniyay"],
+      "port": 5500,
+      "autoPort": false
+    }
+  ]
+}

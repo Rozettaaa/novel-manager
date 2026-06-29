@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Novel Manager</title>
-<link rel="stylesheet" href="style.css?v=18">
-<script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+<link rel="stylesheet" href="style.css?v=26">
+<script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);var u=localStorage.getItem('wt_ui');if(!u)u=(window.innerWidth<=768?'mobile':'desktop');document.documentElement.setAttribute('data-ui',u);}catch(e){}</script>
 </head>
 <body>
 
@@ -34,6 +34,7 @@
       <div id="gStatus" class="g-status">ยังไม่เชื่อมต่อ Google</div>
       <button id="connectBtn" class="tool-btn-wide">เชื่อมต่อ Google</button>
       <button id="switchBtn" class="tool-btn-wide" style="display:none">เปลี่ยนบัญชี</button>
+      <button id="uiModeBtn" class="tool-btn-wide" title="สลับโหมดการแสดงผล">📱 สลับเป็นมือถือ</button>
     </div>
   </nav>
 
@@ -107,6 +108,11 @@
         <div class="editor-head">
           <button id="backBtn" class="ghost-btn small">← กลับ</button>
           <div id="fileTitle" class="file-title">—</div>
+          <div id="edFolderGoal" class="ed-folder-goal" hidden title="ความคืบหน้าเป้าหมายของโฟลเดอร์นี้">
+            <span class="efg-label">🎯 <span id="edFolderGoalName"></span></span>
+            <div class="efg-bar"><div id="edFolderGoalFill" class="efg-fill"></div></div>
+            <span class="efg-pct" id="edFolderGoalPct">0%</span>
+          </div>
           <div class="editor-head-right">
             <button id="boldBtn" class="tool-btn" title="ตัวหนา (Ctrl+B)"><b>B</b></button>
             <button id="centerBtn" class="tool-btn" title="จัดกึ่งกลาง">≡</button>
@@ -170,7 +176,14 @@
     <!-- ---------- DASHBOARD VIEW ---------- -->
     <section id="view-dashboard" class="view">
 
-      <div class="picker-bar">
+      <!-- รวม progress bar ของทุกเป้าหมาย -->
+      <div id="dashGoals" class="dash-goals" hidden>
+        <h3 class="section-title">ความคืบหน้าทุกเป้าหมาย</h3>
+        <div id="dashGoalsList" class="dash-goals-list"></div>
+        <button id="dashGoalsToggle" class="ghost-btn small" hidden style="margin-top:12px"></button>
+      </div>
+
+      <div id="dashBar" class="picker-bar">
         <div id="dashFilter" class="seg">
           <button class="seg-btn active" data-filter="mine">ไดรฟ์ของฉัน</button>
           <button class="seg-btn" data-filter="shared">แชร์กับฉัน</button>
@@ -230,15 +243,51 @@
     </section>
 
   </main>
+
+  <!-- ============ MOBILE: bottom navbar ============ -->
+  <nav class="mobile-nav" id="mobileNav">
+    <button class="mnav-item active" data-mview="write"><span class="mnav-ico">✍️</span><span class="mnav-txt">Writing</span></button>
+    <button class="mnav-item" data-mview="dashboard"><span class="mnav-ico">📊</span><span class="mnav-txt">Dashboard</span></button>
+    <button class="mnav-item" data-mview="settings"><span class="mnav-ico">⚙️</span><span class="mnav-txt">ตั้งค่า</span></button>
+  </nav>
+
+  <!-- ============ MOBILE: settings sheet ============ -->
+  <div class="m-sheet-backdrop" id="mSheetBackdrop" hidden></div>
+  <div class="m-sheet" id="mobileSettings" hidden role="dialog" aria-label="ตั้งค่า">
+    <div class="m-sheet-grab"></div>
+    <div class="m-sheet-head"><h2>ตั้งค่า</h2><button id="mSettingsClose" class="ed-panel-close" aria-label="ปิด">✕</button></div>
+
+    <div class="m-sheet-sec">
+      <h3>บัญชี Google</h3>
+      <div id="mGStatus" class="m-status">ยังไม่เชื่อมต่อ Google</div>
+      <button id="mConnectBtn" class="tool-btn-wide">เชื่อมต่อ Google</button>
+      <button id="mSwitchBtn" class="tool-btn-wide" style="display:none">เปลี่ยนบัญชี</button>
+    </div>
+
+    <div class="m-sheet-sec">
+      <h3>ธีมสี</h3>
+      <div class="m-theme-grid">
+        <button class="m-theme-opt" data-theme="default">ค่าเริ่มต้น</button>
+        <button class="m-theme-opt" data-theme="wood">ไม้/เบจอ่อน</button>
+        <button class="m-theme-opt" data-theme="dark">มืด (Dark)</button>
+        <button class="m-theme-opt" data-theme="green">เขียวคลีน</button>
+      </div>
+    </div>
+
+    <div class="m-sheet-sec">
+      <h3>การแสดงผล</h3>
+      <button id="mUiToggle" class="tool-btn-wide">🖥 สลับเป็นเดสก์ท็อป</button>
+    </div>
+  </div>
 </div>
 
 <!-- libraries -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=18"></script>
-<script src="app.js?v=18"></script>
-<script src="google.js?v=18"></script>
-<script src="ui.js?v=18"></script>
+<script src="config.js?v=26"></script>
+<script src="app.js?v=26"></script>
+<script src="google.js?v=26"></script>
+<script src="ui.js?v=26"></script>
 </body>
 </html>

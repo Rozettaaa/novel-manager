@@ -276,6 +276,7 @@
     if (G() && G().isConnected()) G().deleteGoalRow(fid).catch((e) => console.error("delGoal:", e));
   }
   const curFid = () => (pathStack.length ? pathStack[pathStack.length - 1].id : null);
+  const curFname = () => (pathStack.length ? pathStack[pathStack.length - 1].name : "");
 
   function renderGoalForFolder() {
     const g = getGoal(curFid());
@@ -335,6 +336,7 @@
     const days = Math.max(1, parseInt($("goalDays").value, 10) || 0);
     const g = getGoal(fid) || {};
     g.target = target; g.days = days; g.created = g.created || window.WT.todayKey();
+    g.name = curFname() || g.name || "";   // เก็บชื่อโฟลเดอร์ไว้แสดงรวมใน Dashboard
     setGoal(fid, g);
     await computeGoalProgress();
   });
@@ -422,6 +424,22 @@
   });
 
   // เปิดไฟล์มาเขียน (เรนเดอร์ ไม่ยุ่งกับ history)
+  // แสดง progress bar เป้าหมายของโฟลเดอร์ที่มุมบนขวาของหน้าเขียน (ถ้าตั้งเป้าไว้)
+  function renderEditorFolderGoal(folderId, folderName) {
+    const el = $("edFolderGoal");
+    if (!el) return;
+    const g = getGoal(folderId);
+    if (!g || !(g.target > 0)) { el.hidden = true; return; }
+    const total = g.lastTotal || 0;
+    const pct = Math.min(100, Math.round((total / g.target) * 100));
+    const done = total >= g.target;
+    $("edFolderGoalName").textContent = g.name || folderName || "เป้าหมาย";
+    $("edFolderGoalFill").style.width = pct + "%";
+    $("edFolderGoalPct").textContent = pct + "%" + (done ? " 🎉" : "");
+    el.title = `เป้าหมายโฟลเดอร์: ${total.toLocaleString()} / ${g.target.toLocaleString()} คำ`;
+    el.hidden = false;
+  }
+
   async function openFile(fileId, fileName) {
     const cur = pathStack[pathStack.length - 1];
     curFolderId = cur.id; curFolderName = cur.name;   // โฟลเดอร์ที่ไฟล์นี้อยู่ (ใช้กับสถิติ)
@@ -433,6 +451,7 @@
       curFileId = fileId; curFileName = fileName;
       window.WT.loadDoc(text, ranges, baseline, fileName, aligns);
       $("fileTitle").textContent = fileName;
+      renderEditorFolderGoal(cur.id, cur.name);
       $("writePicker").hidden = true;
       $("writeEditor").hidden = false;
       if (normalized) window.WT.flushNow().catch((e) => console.error("clean save:", e));
@@ -567,6 +586,9 @@
   }
   function initDashboard() {
     if (!G() || !G().isConnected()) {
+      // ยังไม่เชื่อมต่อ → ซ่อนทุกอย่าง เหลือแค่ข้อความเชื่อมต่อ (pattern เดียวกับหน้า Writing)
+      $("dashBar").style.display = "none";
+      $("dashGoals").hidden = true;
       $("dashFolders").innerHTML = "";
       $("dashBreadcrumb").innerHTML = "";
       $("dashContent").hidden = true;
@@ -574,9 +596,100 @@
       $("dashEmpty").textContent = "เชื่อมต่อ Google ก่อนเพื่อดูสถิติ";
       return;
     }
+    $("dashBar").style.display = "";
+    renderDashGoals();
     if (!dashPath.length) dashPath = [dashRootEntry()];
     renderDashboard();
   }
+
+  // ---- pin (ปักหมุดเป้า สูงสุด 3 อัน, เก็บใน localStorage) ----
+  const MAX_PINS = 3, GOALS_LIMIT = 9;
+  let dashGoalsExpanded = false;
+  const getPins = () => { try { return JSON.parse(localStorage.getItem("wt_pins")) || []; } catch { return []; } };
+  const setPins = (a) => localStorage.setItem("wt_pins", JSON.stringify(a.slice(0, MAX_PINS)));
+  function togglePin(fid) {
+    let p = getPins();
+    if (p.includes(fid)) p = p.filter((x) => x !== fid);
+    else {
+      if (p.length >= MAX_PINS) { alert(`ปักหมุดได้สูงสุด ${MAX_PINS} เรื่อง`); return; }
+      p.push(fid);
+    }
+    setPins(p);
+    renderDashGoals();
+  }
+
+  // รวม progress bar ของทุกเป้าหมาย (จาก goalsMap ที่โหลดไว้)
+  function renderDashGoals() {
+    let goals = Object.keys(goalsMap).map((fid) => ({ fid, ...goalsMap[fid] })).filter((g) => g.target > 0);
+    if (!goals.length) { $("dashGoals").hidden = true; return; }
+
+    const pins = getPins().filter((fid) => goals.some((g) => g.fid === fid));
+    const pinnedSet = new Set(pins);
+    const pinned = pins.map((fid) => goals.find((g) => g.fid === fid));
+    const rest = goals.filter((g) => !pinnedSet.has(g.fid))
+      .sort((a, b) => (b.lastTotal / b.target) - (a.lastTotal / a.target));  // คืบหน้ามากก่อน
+    const ordered = [...pinned, ...rest];
+
+    const visible = dashGoalsExpanded ? ordered : ordered.slice(0, GOALS_LIMIT);
+    $("dashGoalsList").innerHTML = visible.map((g) => {
+      const total = g.lastTotal || 0;
+      const pct = g.target > 0 ? Math.min(100, Math.round((total / g.target) * 100)) : 0;
+      const done = total >= g.target;
+      const name = g.name || "(ไม่มีชื่อ)";
+      const isPinned = pinnedSet.has(g.fid);
+      return `<div class="dg-row${isPinned ? " pinned" : ""}" data-fid="${esc(g.fid)}" data-name="${esc(name)}">
+        <button class="dg-pin${isPinned ? " on" : ""}" data-fid="${esc(g.fid)}" title="${isPinned ? "เลิกปักหมุด" : "ปักหมุดไว้บนสุด"}">📌</button>
+        <div class="dg-main" title="ดูสถิติของเรื่องนี้">
+          <div class="dg-head"><span class="dg-name">${esc(name)}</span><span class="dg-pct${done ? " done" : ""}">${pct}%${done ? " 🎉" : ""}</span></div>
+          <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+          <div class="dg-meta">${total.toLocaleString()} / ${g.target.toLocaleString()} คำ</div>
+        </div>
+      </div>`;
+    }).join("");
+
+    // กดส่วนเนื้อการ์ด → เปิดสถิติของโฟลเดอร์นั้น
+    $("dashGoalsList").querySelectorAll(".dg-row").forEach((el) => {
+      el.querySelector(".dg-main").addEventListener("click", async () => {
+        dashPath = [dashRootEntry(), { id: el.dataset.fid, name: el.dataset.name }];
+        await renderDashboard();
+        $("dashBreadcrumb").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      el.querySelector(".dg-pin").addEventListener("click", (e) => { e.stopPropagation(); togglePin(el.dataset.fid); });
+    });
+
+    // ปุ่มย่อ/ขยาย เมื่อเป้าเกิน 9
+    const toggle = $("dashGoalsToggle");
+    if (ordered.length > GOALS_LIMIT) {
+      toggle.hidden = false;
+      toggle.textContent = dashGoalsExpanded ? "ย่อ" : `ดูทั้งหมด (${ordered.length})`;
+    } else { toggle.hidden = true; }
+
+    $("dashGoals").hidden = false;
+  }
+  if ($("dashGoalsToggle")) $("dashGoalsToggle").addEventListener("click", () => {
+    dashGoalsExpanded = !dashGoalsExpanded;
+    renderDashGoals();
+  });
+
+  // เป้าเดิมที่ยังไม่มีชื่อโฟลเดอร์ (ตั้งก่อนมีคอลัมน์ชื่อ) → ดึงชื่อจาก Drive มาเติม + เซฟกลับ
+  async function backfillGoalNames() {
+    const fids = Object.keys(goalsMap).filter((fid) => !goalsMap[fid].name);
+    if (!fids.length || !G() || !G().getName) return;
+    let changed = false;
+    for (const fid of fids) {
+      const name = await G().getName(fid);
+      goalsMap[fid].name = name || "(โฟลเดอร์ถูกลบ)";
+      if (name) {
+        changed = true;
+        G().saveGoalRow(fid, goalsMap[fid]).catch((e) => console.error("backfill save:", e));
+      }
+    }
+    if (changed) {
+      renderGoalForFolder();
+      if ($("view-dashboard").classList.contains("active")) renderDashGoals();
+    }
+  }
+
   async function renderDashboard() {
     // breadcrumb
     $("dashBreadcrumb").innerHTML = dashPath
@@ -605,7 +718,10 @@
     $("dashEmpty").textContent = "กำลังโหลดสถิติ...";
     $("dashContent").hidden = true;
     try {
-      const rows = await G().getFolderStats(cur.id);
+      let rows = await G().getFolderStats(cur.id);
+      // กรองเฉพาะไฟล์ที่ยังมีอยู่จริงในโฟลเดอร์ (ไฟล์ที่ลบไปแล้วจะไม่นับ)
+      const aliveIds = new Set(children.docs.map((d) => d.id));
+      rows = rows.filter((r) => aliveIds.has(r.fileId));
       if (!rows.length) {
         $("dashEmpty").textContent = "โฟลเดอร์นี้ยังไม่มีข้อมูลการเขียน (ลองเข้าโฟลเดอร์ย่อย)";
         return;
@@ -766,10 +882,14 @@
   window.UI = {
     onConnected: () => {
       dashPath = [];  // รีเซ็ตเบราว์เซอร์ dashboard
-      // โหลดเป้าทั้งหมดจาก Sheet (ผูกบัญชี ข้ามเครื่อง) แล้ว refresh แผงเป้า
+      // โหลดเป้าทั้งหมดจาก Sheet (ผูกบัญชี ข้ามเครื่อง) แล้ว refresh แผงเป้า + รวมใน dashboard
       if (G() && G().loadGoals) {
-        G().loadGoals().then((m) => { goalsMap = m || {}; renderGoalForFolder(); })
-          .catch((e) => console.error("loadGoals:", e));
+        G().loadGoals().then((m) => {
+          goalsMap = m || {};
+          renderGoalForFolder();
+          if ($("view-dashboard").classList.contains("active")) renderDashGoals();
+          backfillGoalNames();   // เป้าเดิมที่ยังไม่มีชื่อ → ดึงชื่อโฟลเดอร์มาเติม
+        }).catch((e) => console.error("loadGoals:", e));
       }
       if ($("view-write").classList.contains("active") && $("writeEditor").hidden) showWritePicker();
       if ($("view-dashboard").classList.contains("active")) initDashboard();

@@ -361,6 +361,7 @@ function startSprint() {
   $id("sprintPanel").hidden = true;       // ปิดแผงตั้งค่า
   $id("sprintSummary").hidden = true;
   $id("sprintActive").hidden = false;     // โชว์แถบจับเวลาลอยบนสุด
+  updateSprintOffset();                    // ดัน editor-head ลงใต้แถบจับเวลา ไม่ให้ทับปุ่มบันทึก
   sprint.tid = setInterval(tickSprint, 500);
   tickSprint();
 }
@@ -385,6 +386,7 @@ function finishSprint(early) {
   const speed = written / elapsedMin;
   const cmp = diff >= 0 ? `มากกว่าเป้า ${diff} คำ ✅` : `น้อยกว่าเป้า ${Math.abs(diff)} คำ`;
   $id("sprintActive").hidden = true;            // ซ่อนแถบลอย
+  updateSprintOffset();                         // คืนตำแหน่ง editor-head กลับชิดบน
   $id("sprintPanel").hidden = false;            // เปิดแผงเพื่อแสดงสรุป
   $id("sprintSetup").hidden = true;
   const sum = $id("sprintSummary");
@@ -405,7 +407,21 @@ function cancelSprint() {
   if ($id("sprintSummary")) $id("sprintSummary").hidden = true;
   if ($id("sprintSetup")) $id("sprintSetup").hidden = false;
   if ($id("sprintPanel")) $id("sprintPanel").hidden = true;
+  updateSprintOffset();
 }
+
+/* แถบจับเวลา (sprint) ก็ freeze ที่บนสุดเหมือนกัน → เมื่อมันโชว์
+   ให้ดันแถบเครื่องมือ/ปุ่มบันทึก (editor-head) ลงมาอยู่ "ใต้" แถบจับเวลา
+   จะได้ไม่ทับปุ่มบันทึกจนกดไม่ได้ */
+function updateSprintOffset() {
+  const bar = $id("sprintActive");
+  const head = document.querySelector("#writeEditor .editor-head");
+  if (!head) return;
+  if (bar && !bar.hidden) head.style.top = (bar.offsetHeight + 8) + "px";
+  else head.style.top = "";
+}
+// แถบจับเวลาอาจสูงไม่เท่ากันเมื่อขนาดจอเปลี่ยน (มือถือห่อบรรทัด) → คำนวณใหม่
+window.addEventListener("resize", () => { if (sprint) updateSprintOffset(); });
 if ($id("sprintBtn")) $id("sprintBtn").addEventListener("click", openSprintPanel);
 if ($id("sprintStartBtn")) $id("sprintStartBtn").addEventListener("click", startSprint);
 if ($id("sprintStopBtn")) $id("sprintStopBtn").addEventListener("click", () => finishSprint(true));
@@ -467,3 +483,89 @@ window.WT = {
     setSaveStatus("บันทึกแล้ว");
   },
 };
+
+/* ============================================================
+   สลับโหมด UI: เดสก์ท็อป ⇄ มือถือ (bottom nav + settings sheet)
+   ปุ่ม/เมนูในมือถือ "มอบงาน" ให้ปุ่มเดิมของเดสก์ท็อป จึงใช้ logic เดียวกัน
+   ============================================================ */
+(function () {
+  const root = document.documentElement;
+  const nav = document.getElementById("mobileNav");
+  const sheet = document.getElementById("mobileSettings");
+  const backdrop = document.getElementById("mSheetBackdrop");
+  const curMode = () => (root.getAttribute("data-ui") === "mobile" ? "mobile" : "desktop");
+
+  function setLabels() {
+    const txt = curMode() === "mobile" ? "🖥 สลับเป็นเดสก์ท็อป" : "📱 สลับเป็นมือถือ";
+    ["uiModeBtn", "mUiToggle"].forEach((id) => { const b = document.getElementById(id); if (b) b.textContent = txt; });
+  }
+  function syncNav() {
+    if (!nav) return;
+    const active = document.querySelector(".view.active");
+    const view = active ? active.id.replace("view-", "") : "write";
+    const settingsOpen = sheet && !sheet.hidden;
+    nav.querySelectorAll(".mnav-item").forEach((b) =>
+      b.classList.toggle("active", settingsOpen ? b.dataset.mview === "settings" : b.dataset.mview === view));
+  }
+  function syncSheet() {
+    if (!sheet) return;
+    const g = document.getElementById("gStatus"), mg = document.getElementById("mGStatus");
+    if (g && mg) { mg.textContent = g.textContent; mg.className = "m-status" + (g.classList.contains("error") ? " error" : ""); }
+    const cb = document.getElementById("connectBtn"), mcb = document.getElementById("mConnectBtn");
+    if (cb && mcb) mcb.textContent = cb.textContent;
+    const sb = document.getElementById("switchBtn"), msb = document.getElementById("mSwitchBtn");
+    if (sb && msb) msb.style.display = sb.style.display === "none" ? "none" : "";
+    const cur = localStorage.getItem("wt_theme") || "default";
+    sheet.querySelectorAll(".m-theme-opt").forEach((o) => o.classList.toggle("active", o.dataset.theme === cur));
+  }
+  function openSettings() { if (!sheet) return; syncSheet(); sheet.hidden = false; if (backdrop) backdrop.hidden = false; syncNav(); }
+  function closeSettings() { if (!sheet) return; sheet.hidden = true; if (backdrop) backdrop.hidden = true; syncNav(); }
+  function applyUiMode(mode) {
+    root.setAttribute("data-ui", mode);
+    try { localStorage.setItem("wt_ui", mode); } catch (e) {}
+    if (mode !== "mobile") closeSettings();
+    setLabels(); syncNav();
+  }
+  const toggleUi = () => applyUiMode(curMode() === "mobile" ? "desktop" : "mobile");
+
+  ["uiModeBtn", "mUiToggle"].forEach((id) => { const b = document.getElementById(id); if (b) b.addEventListener("click", toggleUi); });
+
+  if (nav) nav.querySelectorAll(".mnav-item").forEach((b) => {
+    b.addEventListener("click", () => {
+      const v = b.dataset.mview;
+      if (v === "settings") { openSettings(); return; }
+      closeSettings();
+      const target = document.querySelector(`.nav-item[data-view="${v}"]`);
+      if (target) target.click();   // ใช้ตัวจัดการเดิม (history + render)
+      syncNav();
+    });
+  });
+
+  const close = document.getElementById("mSettingsClose");
+  if (close) close.addEventListener("click", closeSettings);
+  if (backdrop) backdrop.addEventListener("click", closeSettings);
+  const proxy = (fromId, toId) => {
+    const b = document.getElementById(fromId);
+    if (b) b.addEventListener("click", () => { const t = document.getElementById(toId); if (t) t.click(); });
+  };
+  proxy("mConnectBtn", "connectBtn");
+  proxy("mSwitchBtn", "switchBtn");
+  if (sheet) sheet.querySelectorAll(".m-theme-opt").forEach((o) => {
+    o.addEventListener("click", () => {
+      const item = document.querySelector(`#themeMenu .menu-item[data-theme="${o.dataset.theme}"]`);
+      if (item) item.click(); else if (typeof applyTheme === "function") applyTheme(o.dataset.theme);
+      syncSheet();
+    });
+  });
+
+  // อัปเดตชีตเมื่อสถานะ Google เปลี่ยน + อัปเดตปุ่ม nav เมื่อ view เปลี่ยน (รวม back/forward)
+  if (window.MutationObserver) {
+    const gEl = document.getElementById("gStatus");
+    if (gEl) new MutationObserver(() => { if (sheet && !sheet.hidden) syncSheet(); })
+      .observe(gEl, { childList: true, characterData: true, subtree: true, attributes: true });
+    document.querySelectorAll(".view").forEach((v) =>
+      new MutationObserver(syncNav).observe(v, { attributes: true, attributeFilter: ["class"] }));
+  }
+
+  setLabels(); syncNav();
+})();

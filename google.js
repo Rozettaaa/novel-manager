@@ -147,6 +147,13 @@
     return { folders, docs };
   }
 
+  // ดึงชื่อไฟล์/โฟลเดอร์จาก id (คืน null ถ้าถูกลบ/เข้าไม่ได้)
+  async function getName(fileId) {
+    try {
+      const f = await apiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,trashed`);
+      return (f && !f.trashed) ? f.name : null;
+    } catch (e) { return null; }
+  }
   // ลบไฟล์/โฟลเดอร์ (ย้ายไปถังขยะ — กู้คืนได้ใน Google Drive)
   async function trashFile(fileId) {
     return apiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id`, {
@@ -299,9 +306,20 @@
   /* ---------- Sheets: สถิติรายไฟล์ (ผูกกับบัญชี ข้ามเครื่องได้) ---------- */
   // schema: A=date B=folder_id C=file_id D=file_name E=word_count F=minutes
   let goalsTabReady = false;
+  let sheetVerified = false;
   async function ensureSheet() {
     let id = localStorage.getItem(sheetKey());
-    if (id) return id;
+    if (id) {
+      if (sheetVerified) return id;
+      // ตรวจว่า Sheet ที่ค้างไว้ยังมีอยู่จริง (กัน id ค้างที่ชี้ไฟล์ถูกลบ → จะได้ไปค้นหาไฟล์จริงใหม่)
+      try {
+        const meta = await apiFetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed`);
+        if (meta && meta.id && !meta.trashed) { sheetVerified = true; return id; }
+      } catch (e) { /* ไฟล์หาย/เข้าไม่ได้ → ตกไปค้นหาใหม่ */ }
+      localStorage.removeItem(sheetKey());
+      goalsTabReady = false;
+      id = null;
+    }
 
     // 1) ค้นหา Sheet เดิมใน Drive ตามชื่อก่อน (ทำให้เครื่องอื่นเจอชีตเดิม → สถิติไม่หาย)
     const q = `name = '${CFG.SHEET_TITLE.replace(/'/g, "\\'")}' ` +
@@ -313,6 +331,7 @@
       if (found && found.files && found.files.length) {
         id = found.files[0].id;
         localStorage.setItem(sheetKey(), id);
+        sheetVerified = true;
         return id;
       }
     } catch (e) { console.warn("ค้นหา Sheet เดิมไม่สำเร็จ:", e); }
@@ -332,10 +351,11 @@
       jsonPut({ values: [["date", "folder_id", "file_id", "file_name", "word_count", "minutes"]] })
     );
     await apiFetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A1:F1?valueInputOption=RAW`,
-      jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted"]] })
+      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A1:G1?valueInputOption=RAW`,
+      jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted", "folder_name"]] })
     );
     goalsTabReady = true;
+    sheetVerified = true;
     return id;
   }
 
@@ -352,8 +372,8 @@
         jsonPost({ requests: [{ addSheet: { properties: { title: "goals" } } }] })
       );
       await apiFetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/goals!A1:F1?valueInputOption=RAW`,
-        jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted"]] })
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/goals!A1:G1?valueInputOption=RAW`,
+        jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted", "folder_name"]] })
       );
     }
     goalsTabReady = true;
@@ -364,7 +384,7 @@
     const id = await ensureSheet();
     let data;
     try {
-      data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+      data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:G`);
       goalsTabReady = true;
     } catch (e) {
       await ensureGoalsTab(id);   // ยังไม่มี tab goals
@@ -374,7 +394,7 @@
     (data && data.values || []).forEach((r) => {
       if (r[0]) map[r[0]] = {
         target: Number(r[1] || 0), days: Number(r[2] || 0), created: r[3] || "",
-        lastTotal: Number(r[4] || 0), lastCounted: r[5] || "",
+        lastTotal: Number(r[4] || 0), lastCounted: r[5] || "", name: r[6] || "",
       };
     });
     return map;
@@ -383,19 +403,19 @@
   async function saveGoalRow(folderId, g) {
     const id = await ensureSheet();
     await ensureGoalsTab(id);
-    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:G`);
     const rows = (data && data.values) || [];
     let rowNum = -1;
     for (let i = 0; i < rows.length; i++) { if (rows[i][0] === folderId) { rowNum = i + 2; break; } }
-    const values = [[folderId, g.target, g.days, g.created || "", g.lastTotal || 0, g.lastCounted || ""]];
+    const values = [[folderId, g.target, g.days, g.created || "", g.lastTotal || 0, g.lastCounted || "", g.name || ""]];
     if (rowNum > 0) {
       await apiFetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A${rowNum}:F${rowNum}?valueInputOption=RAW`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A${rowNum}:G${rowNum}?valueInputOption=RAW`,
         jsonPut({ values })
       );
     } else {
       await apiFetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A:F:append?valueInputOption=RAW`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A:G:append?valueInputOption=RAW`,
         jsonPost({ values })
       );
     }
@@ -403,10 +423,10 @@
 
   async function deleteGoalRow(folderId) {
     const id = await ensureSheet();
-    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F`);
+    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:G`);
     const remaining = ((data && data.values) || []).filter((r) => r[0] !== folderId);
     await apiFetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:F:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2:G:clear`,
       jsonPost({})
     );
     if (remaining.length) {
@@ -529,6 +549,7 @@
   }
   async function switchAccount() {
     accessToken = null; connected = false; currentEmail = null;
+    sheetVerified = false; goalsTabReady = false;
     try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(sheetKey()); } catch (e) {}
     setStatus("กำลังเปลี่ยนบัญชี...");
     await connect("select_account");
@@ -539,7 +560,7 @@
     connect: () => connect("consent"),
     switchAccount,
     listFolders, listDocs, listChildren,
-    renameFile, trashFile, createFolder, createDoc,
+    renameFile, trashFile, createFolder, createDoc, getName,
     openDoc, saveDoc,
     upsertStat, getTodayMinutes, getFolderStats, getFileStats,
     loadGoals, saveGoalRow, deleteGoalRow,
