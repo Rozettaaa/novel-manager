@@ -437,6 +437,11 @@ editor.addEventListener("input", () => {
 editor.addEventListener("keyup", updateBoldState);
 editor.addEventListener("mouseup", updateBoldState);
 
+// ขณะพิมพ์ในมือถือ (โฟกัสช่องเขียน/คีย์บอร์ดขึ้น) ซ่อน bottom navbar ลงไป
+// ป้องกัน navbar ลอยขึ้นมาทับเวลาเลื่อนพิมพ์ พอแตะออกจากช่องเขียนค่อยกลับมา
+editor.addEventListener("focus", () => document.documentElement.classList.add("kbd-editing"));
+editor.addEventListener("blur", () => document.documentElement.classList.remove("kbd-editing"));
+
 // Ctrl+S = บันทึก
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {

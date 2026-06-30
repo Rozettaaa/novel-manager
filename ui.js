@@ -602,19 +602,24 @@
     renderDashboard();
   }
 
-  // ---- pin (ปักหมุดเป้า สูงสุด 3 อัน, เก็บใน localStorage) ----
+  // ---- pin (ปักหมุดเป้า สูงสุด 3 อัน, เก็บในชีต Google → ข้ามอุปกรณ์ ไม่หายตอน reconnect) ----
   const MAX_PINS = 3, GOALS_LIMIT = 9;
   let dashGoalsExpanded = false;
-  const getPins = () => { try { return JSON.parse(localStorage.getItem("wt_pins")) || []; } catch { return []; } };
-  const setPins = (a) => localStorage.setItem("wt_pins", JSON.stringify(a.slice(0, MAX_PINS)));
+  // อ่านลำดับ pin จาก goalsMap (มาจากชีต) — fid ที่ pin>0 เรียงตามเลขลำดับการปัก
+  const getPins = () => Object.keys(goalsMap)
+    .filter((fid) => goalsMap[fid] && goalsMap[fid].pin > 0)
+    .sort((a, b) => goalsMap[a].pin - goalsMap[b].pin);
   function togglePin(fid) {
-    let p = getPins();
-    if (p.includes(fid)) p = p.filter((x) => x !== fid);
-    else {
-      if (p.length >= MAX_PINS) { alert(`ปักหมุดได้สูงสุด ${MAX_PINS} เรื่อง`); return; }
-      p.push(fid);
+    const g = goalsMap[fid];
+    if (!g) return;
+    if (g.pin > 0) {
+      g.pin = 0;                       // เลิกปักหมุด
+    } else {
+      if (getPins().length >= MAX_PINS) { alert(`ปักหมุดได้สูงสุด ${MAX_PINS} เรื่อง`); return; }
+      const maxOrder = Math.max(0, ...Object.values(goalsMap).map((x) => x.pin || 0));
+      g.pin = maxOrder + 1;            // ปักต่อท้าย เพื่อรักษาลำดับการปัก
     }
-    setPins(p);
+    setGoal(fid, g);                   // เขียนกลับลงชีต (write-through ผ่าน saveGoalRow)
     renderDashGoals();
   }
 

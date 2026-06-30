@@ -356,6 +356,7 @@ input[type="text"], input[type="number"], select, .rename-input {
 .dash-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .dash-folder {
   text-align: left; border: 1px solid var(--border); background: var(--panel);
+  color: var(--text);   /* กันสีฟ้า default ของ <button> บน iOS ให้เป็นสีดำเหมือนหน้า Writing */
   border-radius: 12px; padding: 16px 16px; cursor: pointer; font-size: 15px; font-weight: 600;
   box-shadow: var(--shadow);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -466,6 +467,10 @@ html[data-ui="mobile"] .mobile-nav {
 }
 .mnav-item .mnav-ico { font-size: 20px; line-height: 1; }
 .mnav-item.active { opacity: 1; color: #fff; background: var(--accent); }
+html[data-ui="mobile"] .mobile-nav { transition: transform .2s ease; }
+/* ขณะพิมพ์ (คีย์บอร์ดเด้งขึ้น) ซ่อน navbar ลงไป ไม่ให้ลอยขึ้นมาทับ/กระตุก
+   พอแตะออกจากช่องเขียน navbar กลับมาเอง */
+html.kbd-editing[data-ui="mobile"] .mobile-nav { transform: translateY(140%); }
 
 /* ---------- settings bottom-sheet ---------- */
 .m-sheet-backdrop {
