@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Novel Manager</title>
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=35">
 <script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);var u=localStorage.getItem('wt_ui');if(!u)u=(window.innerWidth<=768?'mobile':'desktop');document.documentElement.setAttribute('data-ui',u);}catch(e){}</script>
 </head>
 <body>
@@ -20,6 +20,7 @@
 
     <button class="nav-item active" data-view="write" title="Writing">✍️ <span>Writing</span></button>
     <button class="nav-item" data-view="dashboard" title="Dashboard">📊 <span>Dashboard</span></button>
+    <button class="nav-item" data-view="random" title="Random">🎲 <span>Random</span></button>
 
     <div class="sidebar-foot">
       <div class="menu-root theme-menu-root">
@@ -246,12 +247,59 @@
       </div>
     </section>
 
+    <!-- ---------- RANDOM VIEW (สุ่มชื่อ + คลังคำบรรยาย) — ใช้ได้โดยไม่ต้องต่อ Google ---------- -->
+    <section id="view-random" class="view">
+      <h2 class="page-title">สุ่มชื่อตัวละคร &amp; คลังคำบรรยาย</h2>
+
+      <div class="seg rnd-tabs">
+        <button class="seg-btn active" data-rtab="name">🎲 สุ่มชื่อ</button>
+        <button class="seg-btn" data-rtab="desc">📚 คลังคำบรรยาย</button>
+      </div>
+
+      <!-- TAB: สุ่มชื่อ -->
+      <div id="rndNameTab" class="rnd-panel">
+        <div class="rnd-controls">
+          <label class="rnd-field">
+            <span>ประเภท / บรรดาศักดิ์</span>
+            <select id="rndGender" class="rnd-select"></select>
+          </label>
+          <button id="rndNameBtn" class="primary-btn rnd-roll">🎲 สุ่มชื่อ</button>
+        </div>
+
+        <div id="rndResult" class="rnd-result" hidden>
+          <span id="rndResultText" class="rnd-result-text"></span>
+          <button id="rndResultCopy" class="ghost-btn small">คัดลอก</button>
+        </div>
+
+        <div class="rnd-history-wrap" id="rndHistoryWrap" hidden>
+          <div class="rnd-subtitle">สุ่มล่าสุด <button id="rndHistoryClear" class="linklike">ล้าง</button></div>
+          <div id="rndHistory" class="rnd-history"></div>
+        </div>
+      </div>
+
+      <!-- TAB: คลังคำบรรยาย -->
+      <div id="rndDescTab" class="rnd-panel" hidden>
+        <div class="rnd-controls">
+          <label class="rnd-field">
+            <span>หมวดหมู่</span>
+            <select id="rndCategory" class="rnd-select"></select>
+          </label>
+          <button id="rndDescBtn" class="primary-btn">แสดงข้อมูล</button>
+        </div>
+
+        <input type="text" id="rndSearch" class="rnd-search" placeholder="🔍 ค้นหาคำบรรยาย..." disabled>
+        <div id="rndDescMsg" class="rnd-msg"></div>
+        <div id="rndDescList" class="rnd-desc-list"></div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ============ MOBILE: bottom navbar ============ -->
   <nav class="mobile-nav" id="mobileNav">
     <button class="mnav-item active" data-mview="write"><span class="mnav-ico">✍️</span><span class="mnav-txt">Writing</span></button>
     <button class="mnav-item" data-mview="dashboard"><span class="mnav-ico">📊</span><span class="mnav-txt">Dashboard</span></button>
+    <button class="mnav-item" data-mview="random"><span class="mnav-ico">🎲</span><span class="mnav-txt">Random</span></button>
     <button class="mnav-item" data-mview="settings"><span class="mnav-ico">⚙️</span><span class="mnav-txt">ตั้งค่า</span></button>
   </nav>
 
@@ -301,9 +349,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=33"></script>
-<script src="app.js?v=33"></script>
-<script src="google.js?v=33"></script>
-<script src="ui.js?v=33"></script>
+<script src="config.js?v=35"></script>
+<script src="app.js?v=35"></script>
+<script src="google.js?v=35"></script>
+<script src="ui.js?v=35"></script>
+<script src="random-data.js?v=35"></script>
+<script src="random.js?v=35"></script>
 </body>
 </html>

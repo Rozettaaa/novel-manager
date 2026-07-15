@@ -77,7 +77,7 @@
     const nav = document.querySelector(`.nav-item[data-view="${name}"]`);
     if (nav) nav.classList.add("active");
     const hb = $("headbarTitle");
-    if (hb) hb.textContent = name === "dashboard" ? "Dashboard" : "Writing";
+    if (hb) hb.textContent = name === "dashboard" ? "Dashboard" : name === "random" ? "Random" : "Writing";
   }
 
   function writeBrowseState() {
@@ -93,6 +93,10 @@
     // sprint อยู่เฉพาะหน้าเขียนไฟล์ — ออกไปหน้าอื่น (picker/dashboard) ให้ยกเลิก
     if (window.WT && window.WT.cancelSprint && !(s && s.view === "write" && s.editing)) {
       window.WT.cancelSprint();
+    }
+    if (s && s.view === "random") {   // เมนู Random ใช้ได้โดยไม่ต้องต่อ Google
+      domShowView("random");
+      return;
     }
     if (s && s.view === "dashboard") {
       domShowView("dashboard");
@@ -126,7 +130,9 @@
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const name = btn.dataset.view;
-      pushNav(name === "dashboard" ? { view: "dashboard" } : writeBrowseState());
+      pushNav(name === "dashboard" ? { view: "dashboard" }
+        : name === "random" ? { view: "random" }
+        : writeBrowseState());
     });
   });
   // ชื่อเว็บ (มุมบนซ้าย) → กลับหน้าแรกเสมอ (หน้าเขียน รากไดรฟ์ของฉัน)
