@@ -81,6 +81,9 @@
     setTimeout(() => waitGisReady(cb, n + 1), 100);
   }
 
+  // token ยังใช้ได้อยู่ไหม (เผื่อ buffer 2 นาที กันหมดอายุระหว่างเซฟ)
+  function tokenValid() { return !!accessToken && (tokenExpiry - Date.now() > 120000); }
+
   /* ---------- fetch helper ---------- */
   async function apiFetch(url, opts, allowRetry) {
     opts = opts || {};
@@ -577,6 +580,7 @@
 
   window.GoogleSync = {
     isConnected: () => connected,
+    tokenValid,
     connect: () => connect("consent"),
     switchAccount,
     listFolders, listDocs, listChildren,

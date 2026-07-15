@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Novel Manager</title>
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=33">
 <script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);var u=localStorage.getItem('wt_ui');if(!u)u=(window.innerWidth<=768?'mobile':'desktop');document.documentElement.setAttribute('data-ui',u);}catch(e){}</script>
 </head>
 <body>
@@ -99,7 +99,11 @@
           </div>
         </div>
 
+        <!-- ไฟล์ที่เพิ่งเปิดล่าสุด (แสดงเฉพาะหน้าแรกสุด) -->
+        <div id="recentFolders" class="recent-folders" hidden></div>
+
         <div id="pickerHint" class="picker-hint">เชื่อมต่อ Google ก่อนเพื่อโหลดโฟลเดอร์จาก Drive</div>
+        <div id="allFilesTitle" class="recent-title all-files-title" hidden>ไฟล์ทั้งหมด</div>
         <div id="pickerList" class="picker-list"></div>
       </div>
 
@@ -112,11 +116,11 @@
             <span class="efg-label">🎯 <span id="edFolderGoalName"></span></span>
             <div class="efg-bar"><div id="edFolderGoalFill" class="efg-fill"></div></div>
             <span class="efg-pct" id="edFolderGoalPct">0%</span>
+            <button id="edGoalRefresh" class="efg-refresh" title="นับจำนวนคำของโฟลเดอร์นี้ใหม่">🔄</button>
           </div>
           <div class="editor-head-right">
             <button id="boldBtn" class="tool-btn" title="ตัวหนา (Ctrl+B)"><b>B</b></button>
             <button id="centerBtn" class="tool-btn" title="จัดกึ่งกลาง">≡</button>
-            <button id="clearBoldBtn" class="ghost-btn small" title="ล้างตัวหนาทั้งไฟล์">ล้างตัวหนา</button>
             <button id="downloadBtn" class="ghost-btn small">⬇ .docx</button>
             <button id="saveBtn" class="primary-btn" title="บันทึก (Ctrl+S)">💾 บันทึก</button>
             <span id="saveStatus" class="save-status">บันทึกแล้ว</span>
@@ -279,15 +283,27 @@
       <button id="mUiToggle" class="tool-btn-wide">🖥 สลับเป็นเดสก์ท็อป</button>
     </div>
   </div>
+
+  <!-- ============ หน้าต่างเชื่อมต่อ Google ใหม่ (ตอน session หลุดระหว่างเขียน) ============ -->
+  <div class="reconnect-modal" id="reconnectModal" hidden role="dialog" aria-label="เชื่อมต่อใหม่">
+    <div class="reconnect-card">
+      <div class="reconnect-icon">🔌</div>
+      <h3>การเชื่อมต่อ Google หมดอายุ</h3>
+      <p class="reconnect-note">เนื้อหาที่คุณเพิ่งเขียน <b>ยังอยู่ครบ ไม่ได้หายไปไหน</b><br>
+      กดเชื่อมต่อใหม่ แล้วระบบจะบันทึกสิ่งที่เขียนค้างไว้ให้ทันที</p>
+      <button id="reconnectBtn" class="primary-btn">เชื่อมต่อ Google ใหม่แล้วบันทึก</button>
+      <button id="reconnectCancel" class="ghost-btn small">ไว้ก่อน (เนื้อหายังอยู่)</button>
+    </div>
+  </div>
 </div>
 
 <!-- libraries -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=28"></script>
-<script src="app.js?v=28"></script>
-<script src="google.js?v=28"></script>
-<script src="ui.js?v=28"></script>
+<script src="config.js?v=33"></script>
+<script src="app.js?v=33"></script>
+<script src="google.js?v=33"></script>
+<script src="ui.js?v=33"></script>
 </body>
 </html>

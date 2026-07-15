@@ -282,6 +282,11 @@ input[type="text"], input[type="number"], select, .rename-input {
 .efg-bar { width: 90px; height: 7px; background: var(--border); border-radius: 6px; overflow: hidden; }
 .efg-fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
 .efg-pct { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 32px; text-align: right; }
+.efg-refresh { border: none; background: transparent; cursor: pointer; font-size: 13px; padding: 2px; line-height: 1; border-radius: 6px; }
+.efg-refresh:hover { background: var(--border); }
+.efg-refresh:disabled { cursor: default; opacity: .6; }
+.efg-refresh.spinning { animation: efg-spin .8s linear infinite; }
+@keyframes efg-spin { to { transform: rotate(360deg); } }
 .save-status { font-size: 12px; color: #2f9e44; font-weight: 600; }
 .save-status.saving { color: var(--muted); }
 .save-status.error { color: #e03131; }
@@ -531,3 +536,37 @@ html[data-ui="mobile"] .sprint-clock { font-size: 22px; }
 
 /* ทำให้แตะง่ายขึ้นบนมือถือ */
 html[data-ui="mobile"] .pick-item { padding-top: 14px; padding-bottom: 14px; }
+
+/* ============ โฟลเดอร์ล่าสุด (Recent) ============ */
+.recent-folders { margin-bottom: 20px; }
+.recent-title { font-size: 13px; color: var(--muted); font-weight: 700; margin-bottom: 8px; }
+.all-files-title { margin-top: 4px; margin-bottom: 10px; }
+.recent-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.recent-card {
+  display: flex; align-items: center; gap: 8px; max-width: 240px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  border-radius: 10px; padding: 10px 14px; cursor: pointer;
+  font-size: 14px; font-weight: 600; box-shadow: var(--shadow);
+}
+.recent-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+html[data-ui="mobile"] .recent-card { flex: 1 1 100%; max-width: none; }
+
+/* ============ หน้าต่างเชื่อมต่อ Google ใหม่ ============ */
+.reconnect-modal {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.5); padding: 20px;
+}
+.reconnect-card {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.28);
+  padding: 26px 24px; max-width: 380px; width: 100%;
+  text-align: center; display: flex; flex-direction: column; gap: 12px;
+}
+.reconnect-icon { font-size: 40px; }
+.reconnect-card h3 { margin: 0; font-size: 19px; }
+.reconnect-note { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.7; }
+.reconnect-card .primary-btn { margin-top: 4px; }
+.reconnect-card .ghost-btn { align-self: center; }

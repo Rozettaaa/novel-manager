@@ -24,6 +24,47 @@
       : { id: "root", name: "ไดรฟ์ของฉัน" };
   }
 
+  /* ---------- ไฟล์ที่เพิ่งเปิดล่าสุด (Recent files) ---------- */
+  const RECENT_KEY = "wt_recent_files", RECENT_MAX = 20, RECENT_SHOW = 3;
+  const getRecents = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; } };
+  function pushRecentFile(f) {
+    if (!f || !f.fileId) return;
+    let list = getRecents().filter((r) => r && r.fileId && r.fileId !== f.fileId);
+    list.unshift(f);   // { fileId, fileName, folderId, folderName, root }
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); } catch (e) {}
+  }
+  function renderRecentFiles() {
+    const box = $("recentFolders");
+    if (!box) return;
+    const atRoot = pathStack.length === 1;   // แสดงเฉพาะหน้าแรกสุด
+    const recents = getRecents().filter((r) => r && r.fileId && r.fileName).slice(0, RECENT_SHOW);
+    if (!atRoot || !recents.length) { box.hidden = true; box.innerHTML = ""; return false; }
+    box.innerHTML =
+      `<div class="recent-title">เปิดล่าสุด</div><div class="recent-row">` +
+      recents.map((r) =>
+        `<button class="recent-card" data-file="${esc(r.fileId)}" data-fname="${esc(r.fileName)}"` +
+        ` data-folder="${esc(r.folderId || "")}" data-foldername="${esc(r.folderName || "")}" data-root="${esc(r.root || "mine")}"` +
+        ` title="เปิด ${esc(r.fileName)}">📄 <span>${esc(r.fileName)}</span></button>`
+      ).join("") + `</div>`;
+    box.hidden = false;
+    box.querySelectorAll(".recent-card").forEach((el) => {
+      el.addEventListener("click", () => {
+        const root = el.dataset.root === "shared" ? "shared" : "mine";
+        pickerRoot = root;
+        const rootE = rootEntry();
+        const fid = el.dataset.folder;
+        const path = (!fid || fid === "root" || fid === "shared")
+          ? [rootE]                                                        // ไฟล์อยู่รากไดรฟ์
+          : [rootE, { id: fid, name: el.dataset.foldername || "โฟลเดอร์" }]; // ไฟล์อยู่ในโฟลเดอร์
+        pushNav({
+          view: "write", root, path: path.map((p) => ({ id: p.id, name: p.name })),
+          editing: true, fileId: el.dataset.file, fileName: el.dataset.fname,
+        });
+      });
+    });
+    return true;
+  }
+
   /* ============================================================
      History — ผูกการนำทางเข้ากับปุ่ม back/forward ของเบราว์เซอร์
      ============================================================ */
@@ -122,6 +163,8 @@
     $("pickerHint").style.display = "";
     $("pickerList").innerHTML = "";
     $("breadcrumb").innerHTML = "";
+    if ($("recentFolders")) { $("recentFolders").hidden = true; $("recentFolders").innerHTML = ""; }
+    if ($("allFilesTitle")) $("allFilesTitle").hidden = true;
   }
 
   function showWritePicker() {
@@ -140,6 +183,8 @@
     pickerDetail = false;                          // เข้าโฟลเดอร์ใหม่ → เริ่มที่มุมมองไอคอน
     const cur = pathStack[pathStack.length - 1];
     renderBreadcrumb();
+    const recentsShown = renderRecentFiles();       // แสดงไฟล์ที่เปิดล่าสุด (เฉพาะหน้าแรกสุด)
+    if ($("allFilesTitle")) $("allFilesTitle").hidden = true;   // ซ่อนไว้ก่อน แสดงเมื่อมีรายการจริง
     $("pickerSelectBtn").style.display = "none";
     $("folderGoalBtn").style.display = "none";
     $("folderGoalPanel").hidden = true;
@@ -160,7 +205,11 @@
       $("pickerSelectBtn").style.display = "";     // มีเนื้อหา → โชว์ปุ่มเลือก
       $("folderGoalBtn").style.display = "";
       renderPickerList();
+      if ($("allFilesTitle")) $("allFilesTitle").hidden = !recentsShown;  // มีรายการ + มี "เปิดล่าสุด" ด้านบน → โชว์หัวข้อคั่น
       renderGoalForFolder();                        // ถ้าโฟลเดอร์นี้มีเป้า → แสดง progress
+      // เปิดโฟลเดอร์ที่ตั้งเป้าไว้ → นับจำนวนคำใหม่อัตโนมัติทุกครั้ง
+      // (กันกรณีไปเขียนตรงๆ ใน Google Doc แล้วจำนวนคำไม่ตรง)
+      if (getGoal(cur.id)) computeGoalProgress();
     } catch (e) {
       console.error(e);
       $("pickerHint").textContent = "โหลดไม่สำเร็จ: " + (e.message || e);
@@ -311,23 +360,54 @@
     else meta += " · ยังไม่ได้นับ (กดนับคำใหม่)";
     $("goalMeta").textContent = meta;
   }
-  // นับคำรวมของไฟล์ Doc ในโฟลเดอร์ปัจจุบัน (เฉพาะชั้นนี้ ไม่รวมโฟลเดอร์ย่อย)
-  async function computeGoalProgress() {
-    const fid = curFid();
+  // นับคำรวมของไฟล์ Doc ในโฟลเดอร์ (เฉพาะชั้นนี้ ไม่รวมโฟลเดอร์ย่อย) แล้วอัปเดตเป้า + UI
+  // ใช้ร่วมกันทั้งฝั่ง picker และปุ่มรีเฟรชในหน้าเขียน (onProgress = callback แจ้งความคืบหน้า)
+  async function recountGoal(fid, fname, docs, onProgress) {
     const g = getGoal(fid);
     if (!g) return;
-    const docs = lastChildren.docs || [];
-    $("goalActive").hidden = false; $("goalSetup").hidden = true;
     let total = 0;
     for (let i = 0; i < docs.length; i++) {
-      $("goalMeta").textContent = `กำลังนับคำ ${i + 1}/${docs.length} ไฟล์...`;
+      if (onProgress) onProgress(i, docs.length);
       try { const { text } = await G().openDoc(docs[i].id); total += window.WT.countWords(text); }
       catch (e) { console.error("count doc:", e); }
     }
     g.lastTotal = total; g.lastCounted = window.WT.todayKey();
     setGoal(fid, g);
-    showGoalActive(g);
+    // อัปเดต UI ทั้งฝั่ง picker และ progress bar ในหน้าเขียน ถ้ากำลังแสดงโฟลเดอร์นี้อยู่
+    if (!$("folderGoalPanel").hidden && curFid() === fid) showGoalActive(g);
+    if (!$("writeEditor").hidden && curFolderId === fid) renderEditorFolderGoal(fid, fname);
+    return total;
   }
+
+  // นับคำจากโฟลเดอร์ปัจจุบันในหน้า picker (ใช้รายการไฟล์ที่โหลดไว้แล้ว)
+  async function computeGoalProgress() {
+    const fid = curFid();
+    if (!getGoal(fid)) return;
+    $("goalActive").hidden = false; $("goalSetup").hidden = true;
+    await recountGoal(fid, curFname(), lastChildren.docs || [], (i, n) => {
+      $("goalMeta").textContent = `กำลังนับคำ ${i + 1}/${n} ไฟล์...`;
+    });
+  }
+
+  // รีเฟรชจำนวนคำของ progress bar จากในหน้าเขียน (ดึงรายการไฟล์สดจาก Drive)
+  async function refreshEditorGoalCount() {
+    const fid = curFolderId;
+    if (!fid || !getGoal(fid) || !G() || !G().isConnected()) return;
+    const btn = $("edGoalRefresh");
+    if (btn) { btn.disabled = true; btn.classList.add("spinning"); }
+    const oldPct = $("edFolderGoalPct") ? $("edFolderGoalPct").textContent : "";
+    if ($("edFolderGoalPct")) $("edFolderGoalPct").textContent = "…";
+    try {
+      const docs = await G().listDocs(fid);   // รายการไฟล์ล่าสุด (เผื่อมีเพิ่ม/ลบใน Drive)
+      await recountGoal(fid, curFolderName, docs, null);
+    } catch (e) {
+      console.error("refresh goal count:", e);
+      if ($("edFolderGoalPct")) $("edFolderGoalPct").textContent = oldPct;
+    } finally {
+      if (btn) { btn.disabled = false; btn.classList.remove("spinning"); }
+    }
+  }
+  if ($("edGoalRefresh")) $("edGoalRefresh").addEventListener("click", refreshEditorGoalCount);
 
   if ($("folderGoalBtn")) $("folderGoalBtn").addEventListener("click", openGoalSetup);
   if ($("goalSetBtn")) $("goalSetBtn").addEventListener("click", async () => {
@@ -452,6 +532,8 @@
       window.WT.loadDoc(text, ranges, baseline, fileName, aligns);
       $("fileTitle").textContent = fileName;
       renderEditorFolderGoal(cur.id, cur.name);
+      // จำไฟล์ที่เพิ่งเปิด ไว้แสดงใน "เปิดล่าสุด" บนหน้าแรก
+      pushRecentFile({ fileId, fileName, folderId: cur.id, folderName: cur.name, root: pickerRoot });
       $("writePicker").hidden = true;
       $("writeEditor").hidden = false;
       if (normalized) window.WT.flushNow().catch((e) => console.error("clean save:", e));
@@ -464,18 +546,56 @@
   // ปุ่มกลับในแอป → ใช้ history.back() ให้สอดคล้องกับปุ่ม back ของเบราว์เซอร์
   $("backBtn").addEventListener("click", () => history.back());
 
+  /* ---------- หน้าต่างเชื่อมต่อ Google ใหม่ (ตอน session หลุดระหว่างเขียน) ---------- */
+  const showReconnect = () => { if ($("reconnectModal")) $("reconnectModal").hidden = false; };
+  const hideReconnect = () => { if ($("reconnectModal")) $("reconnectModal").hidden = true; };
+  const isAuthError = (e) => {
+    const m = String((e && e.message) || e || "");
+    // เฉพาะข้อผิดพลาดเรื่องสิทธิ์/เซสชันเท่านั้น (ไม่เหมารวม error 400 ทั่วไป)
+    return /GOOGLE_DISCONNECTED|Unauthorized|invalid[_ ]?(token|credential|grant)/i.test(m)
+        || /(^|\D)(401|403)(\D|$)/.test(m);
+  };
+
+  if ($("reconnectBtn")) $("reconnectBtn").addEventListener("click", async () => {
+    const btn = $("reconnectBtn");
+    btn.disabled = true; btn.textContent = "กำลังเชื่อมต่อ...";
+    try {
+      await G().connect();          // OAuth แบบมี user gesture (จากการกดปุ่มนี้) — popup ไม่ถูกบล็อก
+      hideReconnect();
+      btn.textContent = "เชื่อมต่อ Google ใหม่แล้วบันทึก";
+      await window.WT.flushNow();    // บันทึกเนื้อหาที่เพิ่งเขียนค้างไว้ทันที
+    } catch (e) {
+      console.error("reconnect:", e);
+      btn.textContent = "ยังต่อไม่ได้ — ลองอีกครั้ง";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  if ($("reconnectCancel")) $("reconnectCancel").addEventListener("click", hideReconnect);
+
   /* ---------- ลงทะเบียน save handler ของ editor ---------- */
   window.WT.registerSave(async ({ text, ranges, aligns, words, minutes }) => {
-    if (!curFileId || !G() || !G().isConnected()) return;
-    await G().saveDoc(curFileId, text, ranges, aligns);
-    await G().upsertStat({
-      date: window.WT.todayKey(),
-      folderId: curFolderId,
-      fileId: curFileId,
-      fileName: curFileName,
-      wordCount: words,
-      minutes: minutes,
-    });
+    if (!curFileId) return;
+    // เช็คก่อนบันทึก: ยังต่อกับ Google + token ยังไม่หมดอายุไหม
+    if (!G() || !G().isConnected() || !G().tokenValid()) {
+      showReconnect();
+      throw new Error("GOOGLE_DISCONNECTED");   // ให้ doSave รู้ว่ายังไม่ได้เซฟ → คง dirty ไว้ เนื้อหาไม่หาย
+    }
+    try {
+      await G().saveDoc(curFileId, text, ranges, aligns);
+      await G().upsertStat({
+        date: window.WT.todayKey(),
+        folderId: curFolderId,
+        fileId: curFileId,
+        fileName: curFileName,
+        wordCount: words,
+        minutes: minutes,
+      });
+    } catch (e) {
+      // token เพิ่งหมด/ถูกเพิกถอนระหว่างเซฟ → เปิดหน้าเชื่อมต่อใหม่ (ไม่ทำให้เนื้อหาหาย)
+      if (isAuthError(e)) { showReconnect(); throw new Error("GOOGLE_DISCONNECTED"); }
+      throw e;
+    }
   });
 
   /* ---------- Dashboard ---------- */

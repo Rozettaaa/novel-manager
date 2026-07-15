@@ -209,7 +209,11 @@ async function doSave() {
     setSaveStatus("บันทึกแล้ว");
   } catch (e) {
     console.error("save error:", e);
-    setSaveStatus("บันทึกไม่สำเร็จ — ลองกดบันทึกอีกครั้ง", "error");
+    if (String((e && e.message) || "").includes("GOOGLE_DISCONNECTED"))
+      setSaveStatus("ยังไม่ได้บันทึก — เชื่อมต่อ Google ใหม่", "error");
+    else
+      setSaveStatus("บันทึกไม่สำเร็จ — ลองกดบันทึกอีกครั้ง", "error");
+    // ไม่แตะ dirty → ยังเป็น true เนื้อหาที่เขียนยังอยู่ครบ กดบันทึกใหม่ได้เสมอ
   } finally {
     saving = false;
   }
@@ -258,16 +262,6 @@ function updateAlignState() {
   centerBtn.classList.toggle("active", !!centered);
 }
 if (centerBtn) centerBtn.addEventListener("click", toggleCenter);
-
-/* ล้างตัวหนาทั้งไฟล์ (กดเอง) — คง alignment ไว้ */
-const clearBoldBtn = document.getElementById("clearBoldBtn");
-if (clearBoldBtn) {
-  clearBoldBtn.addEventListener("click", () => {
-    const { text, aligns } = editorToTextAndBold();
-    setFromTextAndBold(text, [], aligns);   // เขียนเนื้อหาเดิมกลับโดยไม่มีตัวหนา (จัดกลางคงเดิม)
-    markDirty();
-  });
-}
 
 /* ---------- ดาวน์โหลด .docx ---------- */
 async function downloadDocx() {
