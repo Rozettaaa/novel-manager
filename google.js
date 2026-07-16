@@ -191,7 +191,8 @@
   /* ---------- Docs: เปิด / บันทึก ---------- */
   function parseDoc(doc) {
     let text = "";
-    const ranges = [];
+    const ranges = [];   // ช่วงตัวหนา
+    const italics = [];  // ช่วงตัวเอียง
     const aligns = [];   // align ต่อย่อหน้า (1 ย่อหน้า = 1 บรรทัด)
     (doc.body.content || []).forEach((el) => {
       if (el.paragraph) {
@@ -200,38 +201,39 @@
         (el.paragraph.elements || []).forEach((pe) => {
           if (pe.textRun) {
             const t = pe.textRun.content || "";
-            const bold = !!(pe.textRun.textStyle && pe.textRun.textStyle.bold);
+            const ts = pe.textRun.textStyle || {};
             const start = text.length;
             text += t;
-            if (bold) ranges.push([start, text.length]);
+            if (ts.bold) ranges.push([start, text.length]);
+            if (ts.italic) italics.push([start, text.length]);
           }
         });
       }
     });
     if (text.endsWith("\n")) text = text.slice(0, -1);
-    return { text, ranges, aligns };
+    return { text, ranges, italics, aligns };
   }
   // ถ้าไฟล์เป็นตัวหนาเกือบทั้งไฟล์ ถือว่าเพี้ยนจากบั๊กเดิม → ล้างตัวหนาทิ้ง
   function normalizeBold(parsed) {
-    const { text, ranges, aligns } = parsed;
+    const { text, ranges, italics, aligns } = parsed;
     const nonWs = (text.match(/\S/g) || []).length;
-    if (!nonWs) return { text, ranges, aligns, normalized: false };
+    if (!nonWs) return { text, ranges, italics, aligns, normalized: false };
     let boldNonWs = 0;
     ranges.forEach(([s, e]) => {
       for (let i = s; i < e && i < text.length; i++) if (/\S/.test(text[i])) boldNonWs++;
     });
     if (boldNonWs >= nonWs * 0.95) {
       console.warn("ไฟล์นี้ตัวหนาเกือบทั้งไฟล์ — ล้างตัวหนาอัตโนมัติ (น่าจะเพี้ยนจากบั๊กเดิม)");
-      return { text, ranges: [], aligns, normalized: true };
+      return { text, ranges: [], italics, aligns, normalized: true };
     }
-    return { text, ranges, aligns, normalized: false };
+    return { text, ranges, italics, aligns, normalized: false };
   }
 
   async function openDoc(fileId) {
     const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}`);
     return normalizeBold(parseDoc(doc));
   }
-  async function saveDoc(fileId, text, ranges, aligns) {
+  async function saveDoc(fileId, text, ranges, aligns, italics) {
     const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}`);
     const content = doc.body.content || [];
     const endIndex = content.length ? content[content.length - 1].endIndex : 1;
@@ -243,8 +245,8 @@
       const L = text.length;
       requests.push({ insertText: { location: { index: 1 }, text } });
 
-      // 1) base style ทั้งก้อน: ฟอนต์ Calibri 12 + ล้างตัวหนาเป็น false
-      //    (สำคัญ: ล้าง bold ทั้งหมดก่อน ไม่งั้นข้อความที่แทรกจะ inherit ตัวหนามาทั้งไฟล์)
+      // 1) base style ทั้งก้อน: ฟอนต์ Calibri 12 + ล้างตัวหนา/ตัวเอียงเป็น false
+      //    (สำคัญ: ล้าง bold/italic ทั้งหมดก่อน ไม่งั้นข้อความที่แทรกจะ inherit มาทั้งไฟล์)
       requests.push({
         updateTextStyle: {
           range: { startIndex: 1, endIndex: 1 + L },
@@ -252,8 +254,9 @@
             weightedFontFamily: { fontFamily: DOC_FONT },
             fontSize: { magnitude: DOC_FONT_SIZE, unit: "PT" },
             bold: false,
+            italic: false,
           },
-          fields: "weightedFontFamily,fontSize,bold",
+          fields: "weightedFontFamily,fontSize,bold,italic",
         },
       });
 
@@ -264,6 +267,17 @@
             range: { startIndex: 1 + s, endIndex: 1 + e },
             textStyle: { bold: true },
             fields: "bold",
+          },
+        });
+      });
+
+      // 2.1) ตัวเอียงเฉพาะช่วงที่ผู้ใช้ทำตัวเอียงในเว็บ
+      (italics || []).forEach(([s, e]) => {
+        requests.push({
+          updateTextStyle: {
+            range: { startIndex: 1 + s, endIndex: 1 + e },
+            textStyle: { italic: true },
+            fields: "italic",
           },
         });
       });

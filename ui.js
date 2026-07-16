@@ -532,10 +532,10 @@
     try {
       $("pickerHint").textContent = "กำลังเปิดไฟล์...";
       $("pickerHint").style.display = "";
-      const { text, ranges, aligns, normalized } = await G().openDoc(fileId);
+      const { text, ranges, italics, aligns, normalized } = await G().openDoc(fileId);
       const baseline = await G().getTodayMinutes(fileId);
       curFileId = fileId; curFileName = fileName;
-      window.WT.loadDoc(text, ranges, baseline, fileName, aligns);
+      window.WT.loadDoc(text, ranges, baseline, fileName, aligns, italics);
       $("fileTitle").textContent = fileName;
       renderEditorFolderGoal(cur.id, cur.name);
       // จำไฟล์ที่เพิ่งเปิด ไว้แสดงใน "เปิดล่าสุด" บนหน้าแรก
@@ -580,7 +580,7 @@
   if ($("reconnectCancel")) $("reconnectCancel").addEventListener("click", hideReconnect);
 
   /* ---------- ลงทะเบียน save handler ของ editor ---------- */
-  window.WT.registerSave(async ({ text, ranges, aligns, words, minutes }) => {
+  window.WT.registerSave(async ({ text, ranges, italics, aligns, words, minutes }) => {
     if (!curFileId) return;
     // เช็คก่อนบันทึก: ยังต่อกับ Google + token ยังไม่หมดอายุไหม
     if (!G() || !G().isConnected() || !G().tokenValid()) {
@@ -588,7 +588,7 @@
       throw new Error("GOOGLE_DISCONNECTED");   // ให้ doSave รู้ว่ายังไม่ได้เซฟ → คง dirty ไว้ เนื้อหาไม่หาย
     }
     try {
-      await G().saveDoc(curFileId, text, ranges, aligns);
+      await G().saveDoc(curFileId, text, ranges, aligns, italics);
       await G().upsertStat({
         date: window.WT.todayKey(),
         folderId: curFolderId,

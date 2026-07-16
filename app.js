@@ -80,13 +80,22 @@ function isBoldNode(node) {
   }
   return false;
 }
+function isItalicNode(node) {
+  let el = node.nodeType === 3 ? node.parentElement : node;
+  while (el && el !== editor) {
+    if (el.tagName === "I" || el.tagName === "EM") return true;
+    if (el.style && el.style.fontStyle === "italic") return true;
+    el = el.parentElement;
+  }
+  return false;
+}
 function blockAlign(el) {
   const ta = (el.style && el.style.textAlign) || "";
   if (ta === "center") return "center";
   if (el.getAttribute && el.getAttribute("align") === "center") return "center";
   return "left";
 }
-// คืน array ของบรรทัด แต่ละบรรทัด = { runs:[{text,bold}], align }
+// คืน array ของบรรทัด แต่ละบรรทัด = { runs:[{text,bold,italic}], align }
 function parseEditor() {
   const lines = [];
   let current = [];
@@ -97,7 +106,7 @@ function parseEditor() {
     for (let k = 0; k < kids.length; k++) {
       const child = kids[k];
       if (child.nodeType === 3) {
-        if (child.nodeValue) current.push({ text: child.nodeValue, bold: isBoldNode(child) });
+        if (child.nodeValue) current.push({ text: child.nodeValue, bold: isBoldNode(child), italic: isItalicNode(child) });
       } else if (child.nodeType === 1) {
         const tag = child.tagName;
         if (tag === "BR") {
@@ -123,7 +132,8 @@ function parseEditor() {
 function editorToTextAndBold() {
   const lines = parseEditor();
   let text = "";
-  const ranges = [];
+  const ranges = [];        // ช่วงตัวหนา
+  const italics = [];       // ช่วงตัวเอียง
   const aligns = [];        // align ต่อบรรทัด (ตรงกับ text.split('\n'))
   let emptyRun = 0;
   let first = true;
@@ -142,19 +152,24 @@ function editorToTextAndBold() {
       const start = text.length;
       text += run.text;
       if (run.bold) ranges.push([start, text.length]);
+      if (run.italic) italics.push([start, text.length]);
     }
   }
-  return { text, ranges, aligns };
+  return { text, ranges, italics, aligns };
 }
 
 /* ---------- {text, ranges} → editor ---------- */
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-function setFromTextAndBold(text, ranges, aligns) {
+function setFromTextAndBold(text, ranges, aligns, italics) {
   const boldAt = new Array(text.length).fill(false);
   (ranges || []).forEach(([s, e]) => {
     for (let i = s; i < e && i < text.length; i++) boldAt[i] = true;
+  });
+  const italAt = new Array(text.length).fill(false);
+  (italics || []).forEach(([s, e]) => {
+    for (let i = s; i < e && i < text.length; i++) italAt[i] = true;
   });
   const lines = text.split("\n");
   let pos = 0, html = "";
@@ -165,11 +180,14 @@ function setFromTextAndBold(text, ranges, aligns) {
     else {
       let i = 0;
       while (i < line.length) {
-        const b = boldAt[pos + i];
+        const b = boldAt[pos + i], it = italAt[pos + i];
         let j = i;
-        while (j < line.length && boldAt[pos + j] === b) j++;
-        const chunk = escapeHtml(line.slice(i, j));
-        html += b ? "<b>" + chunk + "</b>" : chunk;
+        // ตัดช่วงย่อยที่มีทั้ง bold และ italic เหมือนกัน
+        while (j < line.length && boldAt[pos + j] === b && italAt[pos + j] === it) j++;
+        let chunk = escapeHtml(line.slice(i, j));
+        if (it) chunk = "<i>" + chunk + "</i>";
+        if (b) chunk = "<b>" + chunk + "</b>";
+        html += chunk;
         i = j;
       }
     }
@@ -202,9 +220,9 @@ async function doSave() {
   if (saving) return;
   saving = true;
   setSaveStatus("กำลังบันทึก...", "saving");
-  const { text, ranges, aligns } = editorToTextAndBold();
+  const { text, ranges, italics, aligns } = editorToTextAndBold();
   try {
-    await saveHandler({ text, ranges, aligns, words: countWords(editor.innerText || ""), minutes: minutesToday() });
+    await saveHandler({ text, ranges, italics, aligns, words: countWords(editor.innerText || ""), minutes: minutesToday() });
     dirty = false;
     setSaveStatus("บันทึกแล้ว");
   } catch (e) {
@@ -219,18 +237,30 @@ async function doSave() {
   }
 }
 
-/* ---------- ตัวหนา ---------- */
+/* ---------- ตัวหนา / ตัวเอียง ---------- */
 const boldBtn = document.getElementById("boldBtn");
 if (boldBtn) {
   boldBtn.addEventListener("click", () => {
     editor.focus();
     document.execCommand("bold", false, null);
+    markDirty();
+    updateBoldState();
+  });
+}
+const italicBtn = document.getElementById("italicBtn");
+if (italicBtn) {
+  italicBtn.addEventListener("click", () => {
+    editor.focus();
+    document.execCommand("italic", false, null);
+    markDirty();
     updateBoldState();
   });
 }
 function updateBoldState() {
   const active = document.queryCommandState && document.queryCommandState("bold");
   if (boldBtn) boldBtn.classList.toggle("active", !!active);
+  const ital = document.queryCommandState && document.queryCommandState("italic");
+  if (italicBtn) italicBtn.classList.toggle("active", !!ital);
   updateAlignState();
 }
 
@@ -271,7 +301,7 @@ async function downloadDocx() {
     new Paragraph({
       alignment: line.align === "center" ? "center" : undefined,
       children: line.runs.length
-        ? line.runs.map((r) => new TextRun({ text: r.text, bold: r.bold }))
+        ? line.runs.map((r) => new TextRun({ text: r.text, bold: r.bold, italics: r.italic }))
         : [new TextRun({ text: "" })],
     })
   );
@@ -468,10 +498,10 @@ window.WT = {
   currentFileName: () => _currentFileName,
 
   // เปิดไฟล์ใหม่: ใส่เนื้อหา + รีเซ็ตตัวจับเวลาด้วย baseline (นาทีที่เคยเขียนวันนี้)
-  loadDoc: (text, ranges, baselineMin, fileName, aligns) => {
+  loadDoc: (text, ranges, baselineMin, fileName, aligns, italics) => {
     cancelSprint();                                   // เปิดไฟล์ใหม่ → รีเซ็ต sprint
     if ($id("statsPanel")) $id("statsPanel").hidden = true;
-    setFromTextAndBold(text || "", ranges || [], aligns || []);
+    setFromTextAndBold(text || "", ranges || [], aligns || [], italics || []);
     _currentFileName = fileName || "";
     baselineMinutes = baselineMin || 0;
     activeSeconds = 0;
