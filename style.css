@@ -1,24 +1,29 @@
 :root {
-  --bg: #f4f5f7;
+  /* ธีมเริ่มต้น: โทนเย็นสะอาด เน้นอินดิโก้ (แยกจากไม้/เบจชัดเจน) */
+  --bg: #f2f3f7;
   --panel: #ffffff;
   --editor-bg: #ffffff;
-  --border: #e2e5ea;
-  --text: #1f2430;
-  --muted: #8a90a0;
-  --accent: #4c6ef5;
-  --accent-soft: #eef1fe;
-  /* sidebar (ธีมเริ่มต้น: เทาเข้มติดฟ้า, hover อ่อนลง) */
-  --sidebar: #2b3242;
-  --sidebar-soft: #3a4254;
-  --sidebar-text: #cdd2de;
-  --sidebar-btn-border: #434c60;
-  --pill: #eef0f4;
-  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.04);
+  --border: #e6e8ef;
+  --text: #1b1d26;
+  --muted: #8b90a1;
+  --accent: #5a53e0;          /* อินดิโก้-ม่วง (progress / active / ลิงก์) */
+  --accent-soft: #ecebfb;
+  --ink: #23252e;             /* หมึกดำ (ปุ่มหลัก) */
+  /* ใช้กับ bottom nav มือถือ */
+  --sidebar: #1e2230;
+  --sidebar-soft: #2c3242;
+  --sidebar-text: #c7ccda;
+  --sidebar-btn-border: #363d50;
+  --pill: #eef0f5;
+  --shadow: 0 1px 2px rgba(20,22,40,.04), 0 6px 22px rgba(20,22,40,.06);
+  --radius: 16px;
+  --font-ui: "Sarabun", "Segoe UI", system-ui, sans-serif;
+  --font-serif: "Noto Serif Thai", "Noto Serif", Georgia, "Times New Roman", serif;
 }
 /* ธีม: ไม้/เบจอ่อน (อบอุ่น, พื้นเว็บเบจอ่อน, พื้นที่เขียนสีขาว, sidebar น้ำตาลเข้ม) */
 html[data-theme="wood"] {
   --bg: #f8f3ea; --panel: #fffdf8; --editor-bg: #ffffff; --border: #eadfce; --text: #4a3f33; --muted: #a2937e;
-  --accent: #b07d4f; --accent-soft: #f3e9da;
+  --accent: #b07d4f; --accent-soft: #f3e9da; --ink: #4a3f33;
   --sidebar: #443a2e; --sidebar-soft: #564a3b; --sidebar-text: #e6dcc9; --sidebar-btn-border: #5e5240;
   --pill: #ece0d0;
   --shadow: 0 1px 3px rgba(74,63,51,.07), 0 6px 18px rgba(74,63,51,.05);
@@ -26,7 +31,7 @@ html[data-theme="wood"] {
 /* ธีม: มืด (Dark) */
 html[data-theme="dark"] {
   --bg: #15171c; --panel: #1e2128; --editor-bg: #1e2128; --border: #2c303a; --text: #e6e8ef; --muted: #8a90a0;
-  --accent: #5c7cfa; --accent-soft: #232b3d;
+  --accent: #5c7cfa; --accent-soft: #232b3d; --ink: #5c7cfa;
   --sidebar: #0f1115; --sidebar-soft: #1e2128; --sidebar-text: #c3c7d4; --sidebar-btn-border: #2c303a;
   --pill: #2c303a;
   --shadow: 0 1px 3px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
@@ -34,7 +39,7 @@ html[data-theme="dark"] {
 /* ธีม: เขียวคลีน (sidebar เขียวเข้ม) */
 html[data-theme="green"] {
   --bg: #f4faf6; --panel: #ffffff; --editor-bg: #ffffff; --border: #dcebe1; --text: #1f2a24; --muted: #7d9387;
-  --accent: #2f9e44; --accent-soft: #e6f4ea;
+  --accent: #2f9e44; --accent-soft: #e6f4ea; --ink: #1f2a24;
   --sidebar: #173024; --sidebar-soft: #244a37; --sidebar-text: #cfe3d6; --sidebar-btn-border: #2f5742;
   --pill: #e3f0e7;
 }
@@ -43,80 +48,75 @@ html[data-theme="green"] {
 [hidden] { display: none !important; }
 body {
   margin: 0;
-  font-family: "Sarabun", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ============ APP SHELL ============ */
-.app { display: flex; min-height: 100vh; }
+/* ---------- scrollbar ใหญ่ขึ้น จับง่าย (ทั้งเว็บและหน้าต่างลอย) ---------- */
+* { scrollbar-width: auto; scrollbar-color: color-mix(in srgb, var(--muted) 60%, transparent) transparent; }
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 8px; border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 80%, transparent); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:active { background: var(--muted); background-clip: padding-box; }
 
-/* ---------- sidebar ---------- */
+/* หัวข้อ/แบรนด์/ผลลัพธ์ ใช้ serif ให้คาแรกเตอร์วรรณกรรม */
+.brand, .headbar h1, .page-title, .section-title, .file-title,
+.sprint-clock, .goal-head b, .rnd-result-text, .dg-name, .bell-item-name {
+  font-family: var(--font-serif);
+}
+
+/* ============ APP SHELL — แถบเมนูบนสุด (top navbar) ============ */
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ---------- top navbar (เดิมคือ sidebar) ---------- */
 .sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background: var(--sidebar);
-  color: var(--sidebar-text);
-  display: flex;
-  flex-direction: column;
-  padding: 16px 14px;
-  gap: 6px;
-  position: sticky;
-  top: 10px;
-  height: calc(100vh - 20px);
-  margin: 10px 0 10px 10px;
-  border-radius: 18px;
-  transition: width .2s ease;
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  width: 100%;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  backdrop-filter: saturate(1.3) blur(10px);
+  color: var(--text);
+  padding: 12px max(24px, calc((100% - 1120px) / 2));
+  border-bottom: 1px solid var(--border);
+  position: relative; z-index: 30;
 }
-.sidebar.collapsed { width: 64px; padding: 16px 10px; }
+.sidebar.collapsed { width: 100%; padding: 12px max(24px, calc((100% - 1120px) / 2)); }
 
-.sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+.sidebar-top { display: flex; align-items: center; gap: 6px; margin-right: 18px; }
 .brand {
-  font-size: 18px; font-weight: 700; color: var(--sidebar-text);
+  font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: -.01em;
   background: transparent; border: none; cursor: pointer;
-  display: flex; align-items: center; gap: 8px; padding: 6px 6px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 4px;
   overflow: hidden; white-space: nowrap; min-width: 0;
 }
-.brand:hover { color: #fff; }
-.collapse-btn {
-  background: transparent; border: none; color: var(--sidebar-text); cursor: pointer;
-  font-size: 16px; line-height: 1; padding: 6px 8px; border-radius: 8px; flex-shrink: 0;
-}
-.collapse-btn:hover { background: var(--sidebar-soft); color: #fff; }
-.sidebar.collapsed .collapse-btn { transform: scaleX(-1); }  /* « → » */
-.sidebar.collapsed .sidebar-top { flex-direction: column; gap: 10px; }
+.brand:hover { color: var(--accent); }
+.collapse-btn { display: none; }   /* ไม่ใช้ในโหมด navbar บน */
 
 .nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--sidebar-text);
-  padding: 11px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 15px;
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: transparent; color: var(--muted);
+  padding: 9px 15px; border-radius: 999px; cursor: pointer;
+  font-size: 14.5px; font-weight: 600;
   white-space: nowrap; overflow: hidden;
+  transition: background .15s ease, color .15s ease;
 }
-.nav-item:hover { background: var(--sidebar-soft); color: #fff; }
-.nav-item.active { background: var(--accent); color: #fff; }
-.sidebar.collapsed .brand span,
-.sidebar.collapsed .nav-item span { display: none; }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 11px 0; }
-.sidebar.collapsed .sidebar-foot { display: none; }
+.nav-item:hover { background: var(--pill); color: var(--text); }
+.nav-item.active { background: var(--accent); color: #fff; box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 40%, transparent); }
 
-.sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
-.g-status { font-size: 11px; color: var(--sidebar-text); opacity: .65; word-break: break-all; }
-.g-status.error { color: #ff8787; }
+.sidebar-foot { margin-left: auto; display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.g-status { display: none; }   /* สถานะแสดงผ่านปุ่มเชื่อมต่อแทน */
+.g-status.error { color: #e03131; }
 
 /* ---------- main ---------- */
-.content { flex: 1; min-width: 0; padding: 0 32px 26px; }
+.content { width: 100%; max-width: 1120px; margin: 0 auto; padding: 28px 24px 56px; }
 .view { display: none; }
 .view.active { display: block; }
-.page-title { font-size: 18px; margin: 0 0 18px; color: var(--muted); font-weight: 600; }
+.page-title { font-size: 15px; margin: 0 0 20px; color: var(--muted); font-weight: 600; letter-spacing: .01em; }
 
 /* headbar: หัวข้อเมนูปัจจุบัน */
 .headbar {
@@ -126,31 +126,37 @@ body {
   margin-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
-.headbar h1 { margin: 0; font-size: 24px; font-weight: 700; }
+.headbar h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
 
 /* ============ buttons ============ */
 .tool-btn-wide {
-  border: 1px solid var(--sidebar-btn-border); background: var(--sidebar-soft); color: var(--sidebar-text);
-  padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
+  transition: border-color .15s ease, background .15s ease;
 }
-.tool-btn-wide:hover { border-color: var(--accent); color: #fff; }
+.tool-btn-wide:hover { border-color: var(--accent); background: var(--pill); }
 .tool-btn {
-  width: 38px; height: 38px; border: 1px solid var(--border); background: var(--panel);
-  border-radius: 8px; cursor: pointer; font-size: 15px;
+  width: 36px; height: 36px; border: 1px solid transparent; background: transparent; color: var(--text);
+  border-radius: 9px; cursor: pointer; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s ease, color .15s ease;
 }
-.tool-btn:hover { background: var(--accent-soft); }
+.tool-btn:hover { background: var(--pill); }
 .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .primary-btn {
-  border: none; background: var(--accent); color: #fff; padding: 9px 16px;
-  border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+  border: none; background: var(--ink); color: #fbf7ef; padding: 9px 17px;
+  border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+  box-shadow: 0 1px 2px rgba(40,30,15,.18); transition: filter .15s ease, transform .05s ease;
 }
-.primary-btn:hover { filter: brightness(1.05); }
+.primary-btn:hover { filter: brightness(1.25); }
+.primary-btn:active { transform: translateY(1px); }
 .ghost-btn {
   border: 1px solid var(--border); background: var(--panel); color: var(--muted);
-  padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  padding: 8px 14px; border-radius: 9px; cursor: pointer; font-size: 13px;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
 .ghost-btn.small { padding: 6px 12px; font-size: 13px; }
-.ghost-btn:hover { color: var(--text); border-color: #c9cdd6; }
+.ghost-btn:hover { color: var(--text); border-color: var(--muted); background: var(--pill); }
 
 /* ============ WRITE: picker ============ */
 .breadcrumb { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
@@ -179,8 +185,8 @@ body {
 
 /* เป้าการเขียนของโฟลเดอร์ */
 .goal-panel {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 16px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 16px;
 }
 .goal-setup { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
 .goal-setup strong { width: 100%; }
@@ -203,11 +209,12 @@ body {
   border: 1px solid var(--border);
   background: var(--panel);
   border-radius: 12px;
-  padding: 12px 12px 12px 16px;
+  padding: 13px 12px 13px 16px;
   font-size: 15px;
   box-shadow: var(--shadow);
+  transition: border-color .15s ease, background .15s ease, transform .08s ease, box-shadow .15s ease;
 }
-.pick-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+.pick-item:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(20,22,30,.05), 0 8px 24px rgba(20,22,30,.07); }
 .pick-item.folder { font-weight: 600; }
 .pick-name { flex: 1; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pick-menu {
@@ -245,36 +252,43 @@ html[data-theme="dark"] .menu-item.danger:hover { background: #3a2226; }
 input[type="text"], input[type="number"], select, .rename-input {
   background: var(--panel); color: var(--text);
 }
-
-/* ตัวเลือกธีมใน sidebar (dropdown ขอบมน) */
-.theme-menu-root { display: block; margin-bottom: 6px; }
-.theme-btn {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  background: var(--sidebar-soft); color: var(--sidebar-text);
-  border: 1px solid var(--sidebar-btn-border); border-radius: 10px;
-  padding: 9px 12px; font-size: 13px; cursor: pointer;
+/* focus ring สม่ำเสมอทั้งเว็บ (มินิมอลแต่ชัดเจน) */
+input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus,
+.rename-input:focus, .rnd-select:focus, .rnd-search:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
-.theme-btn:hover { border-color: var(--accent); }
-.theme-btn .caret { margin-left: auto; opacity: .7; }
-.sidebar.collapsed .theme-btn span:not(.caret) { display: none; }
+
+/* ตัวเลือกธีม (dropdown ขอบมน) — อยู่ในแถบ navbar บน */
+.theme-menu-root { display: inline-block; margin-bottom: 0; }
+.theme-btn {
+  display: flex; align-items: center; gap: 8px; width: auto;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  transition: border-color .15s ease, background .15s ease;
+}
+.theme-btn:hover { border-color: var(--accent); background: var(--pill); }
+.theme-btn .caret { opacity: .6; }
 /* เมนูธีมเปิดขึ้นด้านบน (อยู่ก้น sidebar) */
-.theme-menu { top: auto; bottom: calc(100% + 6px); left: 0; right: 0; min-width: 0; }
+.theme-menu { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; min-width: 170px; }
 
 /* ============ WRITE: editor ============ */
 .editor-wrap {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: var(--shadow);
+  border-radius: var(--radius); box-shadow: var(--shadow);
 }
 /* แถบเครื่องมือด้านบน ตรึงไว้ (freeze panel) */
 .editor-head {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  background: var(--panel); border-radius: 12px 12px 0 0;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: saturate(1.2) blur(8px); border-radius: var(--radius) var(--radius) 0 0;
 }
-.file-title { font-weight: 700; font-size: 16px; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.editor-head-right { display: flex; align-items: center; gap: 10px; }
-.editor { border-radius: 0 0 12px 12px; }
+.file-title { font-weight: 700; font-size: 15px; letter-spacing: -.01em; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-head-right { display: flex; align-items: center; gap: 6px; }
+.editor { border-radius: 0 0 var(--radius) var(--radius); }
 /* progress bar เป้าหมายโฟลเดอร์ มุมบนขวา แสดงตลอดเวลา */
 .ed-folder-goal { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--pill); border-radius: 999px; }
 .efg-label { font-size: 12px; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -293,10 +307,11 @@ input[type="text"], input[type="number"], select, .rename-input {
 .save-status.dirty { color: #f08c00; }
 
 .mini-stats {
-  display: flex; gap: 22px; padding: 10px 18px;
-  font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 20px; padding: 11px max(20px, calc((100% - 720px) / 2));
+  font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
-.mini-stats b { color: var(--text); }
+.mini-stats b { color: var(--text); font-weight: 700; }
 .mini-stats-actions { margin-left: auto; display: flex; gap: 8px; }
 
 /* แผงในหน้าเขียน (สถิติ / sprint) */
@@ -340,15 +355,18 @@ input[type="text"], input[type="number"], select, .rename-input {
 .sprint-summary b { color: var(--accent); }
 
 .editor {
-  min-height: 64vh; padding: 28px 32px;
-  font-size: 18px; line-height: 1.9; outline: none;
+  min-height: 68vh;
+  /* คุมความกว้างบรรทัดให้อ่านสบาย (คอลัมน์ ~700px จัดกลาง) + เว้นบน/ล่างเยอะๆ ให้โปร่ง */
+  padding: 56px max(28px, calc((100% - 700px) / 2)) 140px;
+  font-family: var(--font-serif);         /* หน้าเขียนเป็น serif ให้อารมณ์ต้นฉบับนิยาย */
+  font-size: 20px; line-height: 2; outline: none;
   white-space: pre-wrap; word-break: break-word;
-  background: var(--editor-bg);
+  background: var(--editor-bg); color: var(--text);
 }
 .editor:empty:before { content: attr(data-placeholder); color: var(--muted); }
 /* เว้นระยะห่างระหว่างย่อหน้าในหน้าเขียน ให้เห็นการขึ้นย่อหน้าใหม่ชัด
    (เป็นแค่การแสดงผลในเว็บ ไม่กระทบ format ที่บันทึกลง Google Doc) */
-.editor > div, .editor > p { margin: 0 0 0.7em; }
+.editor > div, .editor > p { margin: 0 0 0.85em; }
 
 /* ============ DASHBOARD ============ */
 .dash-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -362,11 +380,12 @@ input[type="text"], input[type="number"], select, .rename-input {
 .dash-folder {
   text-align: left; border: 1px solid var(--border); background: var(--panel);
   color: var(--text);   /* กันสีฟ้า default ของ <button> บน iOS ให้เป็นสีดำเหมือนหน้า Writing */
-  border-radius: 12px; padding: 16px 16px; cursor: pointer; font-size: 15px; font-weight: 600;
+  border-radius: var(--radius); padding: 16px 18px; cursor: pointer; font-size: 15px; font-weight: 600;
   box-shadow: var(--shadow);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color .15s ease, transform .08s ease, box-shadow .15s ease;
 }
-.dash-folder:hover { border-color: var(--accent); background: var(--accent-soft); }
+.dash-folder:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(20,22,30,.05), 0 8px 24px rgba(20,22,30,.07); }
 .dash-folders.detail { grid-template-columns: 1fr; gap: 8px; }
 .dash-folders.detail .dash-folder { white-space: normal; overflow: visible; text-overflow: clip; }
 .muted-inline { color: var(--muted); font-size: 13px; }
@@ -377,11 +396,11 @@ input[type="text"], input[type="number"], select, .rename-input {
 .dash-goals-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 .dg-row {
   position: relative;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); transition: border-color .15s;
 }
 .dg-row.pinned { border-color: var(--accent); }
-.dg-main { cursor: pointer; padding: 14px 16px; border-radius: 12px; transition: background .15s; }
+.dg-main { cursor: pointer; padding: 15px 17px; border-radius: var(--radius); transition: background .15s; }
 .dg-main:hover { background: var(--accent-soft); }
 .dg-pin {
   position: absolute; top: 7px; right: 7px; z-index: 2;
@@ -427,9 +446,9 @@ input[type="text"], input[type="number"], select, .rename-input {
 .dash-grid .chart-box:first-child { grid-column: 1 / -1; }
 .chart-box {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow);
+  border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow);
 }
-.chart-box h3 { font-size: 14px; margin: 0 0 12px; }
+.chart-box h3 { font-size: 14px; margin: 0 0 12px; letter-spacing: -.01em; }
 .chart-box canvas { height: 260px !important; max-height: 260px; }
 
 @media (max-width: 820px) {
@@ -459,19 +478,22 @@ html[data-ui="mobile"] .headbar h1 { font-size: 20px; }
 html[data-ui="mobile"] .mobile-nav {
   display: flex;
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-  background: var(--sidebar);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: saturate(1.3) blur(10px);
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 -4px 18px rgba(0,0,0,.18);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 16px rgba(20,22,40,.06);
 }
 .mnav-item {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
   background: transparent; border: none; cursor: pointer;
-  color: var(--sidebar-text); opacity: .7;
+  color: var(--muted); opacity: 1;
   padding: 7px 4px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  transition: color .15s ease, background .15s ease;
 }
 .mnav-item .mnav-ico { font-size: 20px; line-height: 1; }
-.mnav-item.active { opacity: 1; color: #fff; background: var(--accent); }
+.mnav-item:hover { color: var(--text); }
+.mnav-item.active { color: #fff; background: var(--accent); }
 html[data-ui="mobile"] .mobile-nav { transition: transform .2s ease; }
 /* ขณะพิมพ์ (คีย์บอร์ดเด้งขึ้น) ซ่อน navbar ลงไป ไม่ให้ลอยขึ้นมาทับ/กระตุก
    พอแตะออกจากช่องเขียน navbar กลับมาเอง */
@@ -667,7 +689,7 @@ html[data-ui="mobile"] .bell-menu { position: fixed; top: 60px; right: 10px; lef
 /* ============ แท็บภายในไฟล์ Google Doc (หลายแท็บ) ============ */
 .doc-tabs {
   display: flex; gap: 6px; flex-wrap: wrap;
-  padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+  padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg);
 }
 .doc-tab {
   border: 1px solid var(--border); background: var(--bg); color: var(--muted);
@@ -678,3 +700,36 @@ html[data-ui="mobile"] .bell-menu { position: fixed; top: 60px; right: 10px; lef
 .doc-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .all-tabs-stat b { color: var(--accent); }
+
+/* ============ หน้าต่างลอย (Picture-in-Picture) — เรียบ เหลือแค่พื้นที่เขียน + ปุ่มบันทึก ============ */
+.pip-body { margin: 0; background: var(--editor-bg); color: var(--text); font-family: var(--font-ui); }
+.pip-shell { display: flex; flex-direction: column; height: 100vh; background: var(--editor-bg); }
+.pip-bar {
+  flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: saturate(1.2) blur(8px);
+}
+.pip-save { padding: 7px 16px; }
+/* จำนวนคำ (ดันไปด้านขวา) */
+.pip-count { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+/* ชิปจับเวลาเล็กๆ ในแถบบน */
+.pip-timer {
+  font-weight: 700; font-size: 13px; color: var(--accent);
+  background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+/* แถบเลือกแท็บในหน้าต่างลอย: กระชับ เลื่อนแนวนอนได้ ไม่ห่อบรรทัด */
+.pip-body .doc-tabs { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; }
+.pip-body .doc-tab { flex-shrink: 0; }
+/* พื้นที่เขียนเต็มหน้าต่าง เลื่อนได้ ฟอนต์ serif เหมือนหน้าเขียน */
+.editor.pip-surface {
+  flex: 1; min-height: 0; overflow-y: auto; border-radius: 0;
+  padding: 24px 26px 56px; font-size: 18px; line-height: 1.95;
+}
+/* ป้ายในหน้าหลัก ระหว่างเขียนอยู่ในหน้าต่างลอย */
+.pip-note {
+  border: 1.5px dashed var(--border); border-radius: var(--radius);
+  padding: 44px 24px; text-align: center; color: var(--text); font-size: 17px; font-weight: 600;
+  background: var(--panel);
+}
+.pip-note span { display: block; margin-top: 8px; font-size: 13px; font-weight: 400; color: var(--muted); }

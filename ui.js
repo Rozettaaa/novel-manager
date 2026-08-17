@@ -15,8 +15,10 @@
   let pathStack = [];        // เส้นทางโฟลเดอร์ปัจจุบัน [{id, name}]
   let pickerDetail = false;  // false = ไอคอน, true = รายละเอียด (ชื่อเต็ม)
   let lastChildren = { folders: [], docs: [] };
+  let pipWin = null;   // หน้าต่างลอย (ประกาศไว้ก่อน เพื่อให้ $ มองเห็น element ที่ย้ายเข้าไป)
 
-  const $ = (id) => document.getElementById(id);
+  // หา element ทั้งใน DOM หลัก และในหน้าต่างลอย (element ที่ย้ายเข้า PiP)
+  const $ = (id) => document.getElementById(id) || (pipWin && pipWin.document.getElementById(id)) || null;
   const esc = (s) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   function rootEntry() {
@@ -92,6 +94,7 @@
   // เรนเดอร์ตาม state (ใช้ทั้งตอนนำทาง และตอนกด back/forward ของเบราว์เซอร์)
   function applyState(s) {
     curState = s;
+    if (typeof closePip === "function") closePip();   // เปลี่ยนหน้า → คืนกล่องเขียนจาก PiP กลับก่อน
     // sprint อยู่เฉพาะหน้าเขียนไฟล์ — ออกไปหน้าอื่น (picker/dashboard) ให้ยกเลิก
     if (window.WT && window.WT.cancelSprint && !(s && s.view === "write" && s.editing)) {
       window.WT.cancelSprint();
@@ -599,11 +602,118 @@
     curTabId = t.tabId;
     window.WT.loadTab(t.text, t.ranges, t.aligns, t.italics);
     renderDocTabs();
-    recomputeOtherTabsWords(); updateAllTabsWordCount();   // สลับแท็บ → คำนวณคำรวมใหม่
+    recomputeOtherTabsWords(); updateAllTabsWordCount(); updatePipCount();   // สลับแท็บ → คำนวณคำใหม่
   }
 
   // ปุ่มกลับในแอป → ใช้ history.back() ให้สอดคล้องกับปุ่ม back ของเบราว์เซอร์
   $("backBtn").addEventListener("click", () => history.back());
+
+  /* ---------- หน้าต่างลอย (Document Picture-in-Picture) ----------
+     ย้ายกล่องเขียนจริงเข้าไปในหน้าต่างลอย → ปุ่มบันทึก/ตัวหนา/แท็บ ทำงานครบเหมือนเดิม
+     หน้าต่างลอยอยู่เหนือทุกอย่าง เขียนต่อได้แม้สลับแท็บ/ไปทำอย่างอื่น + ปรับขนาดได้ */
+  let pipEditor = null, pipStatus = null, pipDocTabs = null, pipCount = null,
+      pipEditorPH = null, pipStatusPH = null, pipDocTabsPH = null,
+      pipNote = null, pipWrap = null, pipTimer = null, pipTimerIv = null;
+  function updatePipCount() {
+    if (pipCount) pipCount.textContent = "คำ " + window.WT.getWords().toLocaleString();
+  }
+  if ($("editor")) $("editor").addEventListener("input", updatePipCount);
+  function copyStylesToPip(win) {
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((n) => {
+      try { win.document.head.appendChild(n.cloneNode(true)); } catch (e) {}
+    });
+    const r = document.documentElement;
+    const t = r.getAttribute("data-theme");
+    if (t) win.document.documentElement.setAttribute("data-theme", t);
+    win.document.documentElement.setAttribute("data-ui", "desktop");
+  }
+  async function openPip() {
+    if (!("documentPictureInPicture" in window)) {
+      alert("เบราว์เซอร์นี้ยังไม่รองรับหน้าต่างลอย — ใช้ Chrome หรือ Edge เวอร์ชันใหม่นะครับ");
+      return;
+    }
+    const wrap = $("writeEditor"), editor = $("editor"), status = $("saveStatus"), docTabs = $("docTabs");
+    if (!wrap || wrap.hidden || !editor) return;
+    try { pipWin = await window.documentPictureInPicture.requestWindow({ width: 430, height: 560 }); }
+    catch (e) { console.error("pip:", e); return; }
+    copyStylesToPip(pipWin);
+    const doc = pipWin.document;
+    doc.body.classList.add("pip-body");
+
+    // แถบบางๆ: ปุ่มบันทึก + สถานะ + ชิปจับเวลา (ถ้ากำลังจับเวลาอยู่)
+    const shell = doc.createElement("div"); shell.className = "pip-shell";
+    const bar = doc.createElement("div"); bar.className = "pip-bar";
+    const save = doc.createElement("button"); save.className = "primary-btn pip-save"; save.textContent = "💾 บันทึก";
+    save.addEventListener("click", () => { window.WT.flushNow().catch((e) => console.error(e)); });
+    bar.appendChild(save);
+
+    pipEditor = editor; pipStatus = status; pipWrap = wrap;
+    pipEditorPH = document.createComment("pip-editor");
+    editor.parentNode.insertBefore(pipEditorPH, editor);
+    if (status) {
+      pipStatusPH = document.createComment("pip-status");
+      status.parentNode.insertBefore(pipStatusPH, status);
+      bar.appendChild(status);
+    }
+    // จำนวนคำ (อัปเดตสดตอนพิมพ์) — เขียนไปดูไป
+    pipCount = doc.createElement("span"); pipCount.className = "pip-count";
+    bar.appendChild(pipCount);
+    updatePipCount();
+    // ชิปจับเวลา (มิเรอร์จากแถบ sprint ในหน้าหลัก) — เล็กๆ ไม่กินพื้นที่เขียน
+    pipTimer = doc.createElement("span"); pipTimer.className = "pip-timer"; pipTimer.hidden = true;
+    bar.appendChild(pipTimer);
+    pipTimerIv = setInterval(() => {
+      const sa = document.getElementById("sprintActive"), cd = document.getElementById("sprintCountdown");
+      if (sa && !sa.hidden && cd) { pipTimer.hidden = false; pipTimer.textContent = "⏱ " + cd.textContent; }
+      else if (pipTimer) pipTimer.hidden = true;
+    }, 400);
+
+    shell.appendChild(bar);
+    // แถบเลือกแท็บเอกสาร (แสดงเฉพาะไฟล์ที่มีหลายแท็บ — renderDocTabs คุมการซ่อน/แสดง)
+    if (docTabs) {
+      pipDocTabs = docTabs;
+      pipDocTabsPH = document.createComment("pip-doctabs");
+      docTabs.parentNode.insertBefore(pipDocTabsPH, docTabs);
+      shell.appendChild(docTabs);
+    }
+    editor.classList.add("pip-surface");
+    shell.appendChild(editor);            // พื้นที่เขียน
+    doc.body.appendChild(shell);
+
+    // หน้าหลัก: ซ่อนกล่องเขียนเดิม แสดงป้ายแทน
+    wrap.hidden = true;
+    pipNote = document.createElement("div");
+    pipNote.className = "pip-note";
+    pipNote.innerHTML = "🪟 กำลังเขียนในหน้าต่างลอย<span>ปิดหน้าต่างลอยเพื่อกลับมาเขียนที่นี่</span>";
+    wrap.parentNode.insertBefore(pipNote, wrap);
+
+    if ($("pipBtn")) $("pipBtn").classList.add("active");
+    pipWin.addEventListener("pagehide", closePip, { once: true });
+  }
+  function closePip() {
+    if (!pipWin && !pipEditor) return;
+    if (pipTimerIv) { clearInterval(pipTimerIv); pipTimerIv = null; }
+    if (pipEditor && pipEditorPH && pipEditorPH.parentNode) {
+      pipEditor.classList.remove("pip-surface");
+      pipEditorPH.parentNode.insertBefore(pipEditor, pipEditorPH);
+      pipEditorPH.remove();
+    }
+    if (pipDocTabs && pipDocTabsPH && pipDocTabsPH.parentNode) {
+      pipDocTabsPH.parentNode.insertBefore(pipDocTabs, pipDocTabsPH);
+      pipDocTabsPH.remove();
+    }
+    if (pipStatus && pipStatusPH && pipStatusPH.parentNode) {
+      pipStatusPH.parentNode.insertBefore(pipStatus, pipStatusPH);
+      pipStatusPH.remove();
+    }
+    if (pipWrap) pipWrap.hidden = false;
+    if (pipNote) { pipNote.remove(); pipNote = null; }
+    if ($("pipBtn")) $("pipBtn").classList.remove("active");
+    pipEditor = pipStatus = pipDocTabs = pipCount = pipEditorPH = pipStatusPH = pipDocTabsPH = pipWrap = pipTimer = null;
+    const w = pipWin; pipWin = null;
+    if (w) { try { w.close(); } catch (e) {} }
+  }
+  if ($("pipBtn")) $("pipBtn").addEventListener("click", () => { (pipWin ? closePip : openPip)(); });
 
   /* ---------- หน้าต่างเชื่อมต่อ Google ใหม่ (ตอน session หลุดระหว่างเขียน) ---------- */
   const showReconnect = () => { if ($("reconnectModal")) $("reconnectModal").hidden = false; };
