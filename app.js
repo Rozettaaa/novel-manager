@@ -497,6 +497,13 @@ window.WT = {
   isDirty: () => dirty,
   currentFileName: () => _currentFileName,
 
+  // สลับแท็บภายในไฟล์เดียวกัน: เปลี่ยนเนื้อหาในกล่องเขียน โดยไม่รีเซ็ตตัวจับเวลาของไฟล์
+  loadTab: (text, ranges, aligns, italics) => {
+    setFromTextAndBold(text || "", ranges || [], aligns || [], italics || []);
+    dirty = false;
+    setSaveStatus("บันทึกแล้ว");
+  },
+
   // เปิดไฟล์ใหม่: ใส่เนื้อหา + รีเซ็ตตัวจับเวลาด้วย baseline (นาทีที่เคยเขียนวันนี้)
   loadDoc: (text, ranges, baselineMin, fileName, aligns, italics) => {
     cancelSprint();                                   // เปิดไฟล์ใหม่ → รีเซ็ต sprint

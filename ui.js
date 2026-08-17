@@ -10,6 +10,7 @@
   const G = () => window.GoogleSync;
 
   let curFolderId = null, curFolderName = "", curFileId = null, curFileName = "";
+  let curDocTabs = [], curTabId = null;   // แท็บภายในไฟล์ Google Doc (กรณีมีหลายแท็บ)
   let pickerRoot = "mine";   // 'mine' (ไดรฟ์ของฉัน) | 'shared' (แชร์กับฉัน)
   let pathStack = [];        // เส้นทางโฟลเดอร์ปัจจุบัน [{id, name}]
   let pickerDetail = false;  // false = ไอคอน, true = รายละเอียด (ชื่อเต็ม)
@@ -78,6 +79,7 @@
     if (nav) nav.classList.add("active");
     const hb = $("headbarTitle");
     if (hb) hb.textContent = name === "dashboard" ? "Dashboard" : name === "random" ? "Random" : "Writing";
+    if ($("headbar")) $("headbar").hidden = false;   // สลับ view → แสดง headbar (จะถูกซ่อนอีกทีเมื่อเข้า editor)
   }
 
   function writeBrowseState() {
@@ -374,14 +376,17 @@
     let total = 0;
     for (let i = 0; i < docs.length; i++) {
       if (onProgress) onProgress(i, docs.length);
-      try { const { text } = await G().openDoc(docs[i].id); total += window.WT.countWords(text); }
-      catch (e) { console.error("count doc:", e); }
+      try {
+        const res = await G().openDoc(docs[i].id);   // นับรวมทุกแท็บในไฟล์
+        (res.tabs || []).forEach((t) => { total += window.WT.countWords(t.text); });
+      } catch (e) { console.error("count doc:", e); }
     }
     g.lastTotal = total; g.lastCounted = window.WT.todayKey();
     setGoal(fid, g);
     // อัปเดต UI ทั้งฝั่ง picker และ progress bar ในหน้าเขียน ถ้ากำลังแสดงโฟลเดอร์นี้อยู่
     if (!$("folderGoalPanel").hidden && curFid() === fid) showGoalActive(g);
     if (!$("writeEditor").hidden && curFolderId === fid) renderEditorFolderGoal(fid, fname);
+    renderBell();   // นับคำใหม่แล้ว → อัปเดตกระดิ่ง (อาจถึงเป้า/ยังไม่ถึง)
     return total;
   }
 
@@ -532,21 +537,69 @@
     try {
       $("pickerHint").textContent = "กำลังเปิดไฟล์...";
       $("pickerHint").style.display = "";
-      const { text, ranges, italics, aligns, normalized } = await G().openDoc(fileId);
+      const res = await G().openDoc(fileId);
       const baseline = await G().getTodayMinutes(fileId);
       curFileId = fileId; curFileName = fileName;
-      window.WT.loadDoc(text, ranges, baseline, fileName, aligns, italics);
+      curDocTabs = res.tabs || [];
+      const active = curDocTabs.find((t) => t.tabId === res.activeTabId) || curDocTabs[0];
+      curTabId = active ? active.tabId : null;
+      window.WT.loadDoc(active.text, active.ranges, baseline, fileName, active.aligns, active.italics);
       $("fileTitle").textContent = fileName;
+      renderDocTabs();                                 // แถบสลับแท็บ (โชว์เมื่อมีมากกว่า 1 แท็บ)
+      recomputeOtherTabsWords(); updateAllTabsWordCount();   // สถิติ "คำทั้งไฟล์"
       renderEditorFolderGoal(cur.id, cur.name);
       // จำไฟล์ที่เพิ่งเปิด ไว้แสดงใน "เปิดล่าสุด" บนหน้าแรก
       pushRecentFile({ fileId, fileName, folderId: cur.id, folderName: cur.name, root: pickerRoot });
       $("writePicker").hidden = true;
       $("writeEditor").hidden = false;
-      if (normalized) window.WT.flushNow().catch((e) => console.error("clean save:", e));
+      if ($("headbar")) $("headbar").hidden = true;   // หน้าเขียนมีแถบเครื่องมือของตัวเอง → ซ่อน headbar (กันกระดิ่งโผล่)
+      if (active.normalized) window.WT.flushNow().catch((e) => console.error("clean save:", e));
     } catch (e) {
       console.error(e);
       $("pickerHint").textContent = "เปิดไฟล์ไม่สำเร็จ: " + (e.message || e);
     }
+  }
+
+  // นับคำรวมทั้งไฟล์ (ทุกแท็บ) — ใช้ค่าสดของแท็บปัจจุบันจากกล่องเขียน + แคชของแท็บอื่น
+  let otherTabsWords = 0;
+  function recomputeOtherTabsWords() {
+    otherTabsWords = 0;
+    (curDocTabs || []).forEach((t) => { if (t.tabId !== curTabId) otherTabsWords += window.WT.countWords(t.text || ""); });
+  }
+  function updateAllTabsWordCount() {
+    const el = $("allTabsStat");
+    if (!el) return;
+    if (!curDocTabs || curDocTabs.length <= 1) { el.hidden = true; return; }
+    $("wordCountAll").textContent = (otherTabsWords + window.WT.getWords()).toLocaleString();
+    el.hidden = false;
+  }
+  // อัปเดตคำรวมทั้งไฟล์แบบเรียลไทม์ระหว่างพิมพ์ (เบา เพราะแท็บอื่นใช้ค่าที่นับไว้แล้ว)
+  if ($("editor")) $("editor").addEventListener("input", updateAllTabsWordCount);
+
+  // แถบสลับแท็บภายในไฟล์ Google Doc (แสดงเฉพาะไฟล์ที่มีหลายแท็บ)
+  function renderDocTabs() {
+    const bar = $("docTabs");
+    if (!bar) return;
+    if (!curDocTabs || curDocTabs.length <= 1) { bar.hidden = true; bar.innerHTML = ""; return; }
+    bar.innerHTML = curDocTabs.map((t, i) =>
+      `<button class="doc-tab${t.tabId === curTabId ? " active" : ""}" data-tab="${esc(t.tabId || "")}" data-i="${i}">` +
+      `${"".padStart(t.depth || 0, "›")}${t.depth ? " " : ""}${esc(t.title || "แท็บ " + (i + 1))}</button>`
+    ).join("");
+    bar.hidden = false;
+    bar.querySelectorAll(".doc-tab").forEach((el) => {
+      el.addEventListener("click", () => switchTab(Number(el.dataset.i)));
+    });
+  }
+  function switchTab(i) {
+    const t = curDocTabs[i];
+    if (!t || t.tabId === curTabId) return;
+    if (window.WT.isDirty && window.WT.isDirty()) {
+      if (!confirm("ยังมีการแก้ไขที่ยังไม่ได้บันทึกในแท็บนี้\nสลับแท็บโดยไม่บันทึกหรือไม่?")) return;
+    }
+    curTabId = t.tabId;
+    window.WT.loadTab(t.text, t.ranges, t.aligns, t.italics);
+    renderDocTabs();
+    recomputeOtherTabsWords(); updateAllTabsWordCount();   // สลับแท็บ → คำนวณคำรวมใหม่
   }
 
   // ปุ่มกลับในแอป → ใช้ history.back() ให้สอดคล้องกับปุ่ม back ของเบราว์เซอร์
@@ -588,7 +641,10 @@
       throw new Error("GOOGLE_DISCONNECTED");   // ให้ doSave รู้ว่ายังไม่ได้เซฟ → คง dirty ไว้ เนื้อหาไม่หาย
     }
     try {
-      await G().saveDoc(curFileId, text, ranges, aligns, italics);
+      await G().saveDoc(curFileId, text, ranges, aligns, italics, curTabId);
+      // อัปเดตแคชของแท็บที่เพิ่งเซฟ เผื่อสลับไปแท็บอื่นแล้วกลับมา จะได้เนื้อหาล่าสุด
+      const ti = curDocTabs.findIndex((t) => t.tabId === curTabId);
+      if (ti >= 0) curDocTabs[ti] = { ...curDocTabs[ti], text, ranges, italics, aligns };
       await G().upsertStat({
         date: window.WT.todayKey(),
         folderId: curFolderId,
@@ -1009,6 +1065,88 @@
   }
   if ($("fileStatsBtn")) $("fileStatsBtn").addEventListener("click", toggleFileStats);
 
+  /* ---------- กระดิ่งแจ้งเตือน: เรื่องใกล้ถึงกำหนด ---------- */
+  const NOTIFY_WITHIN_DAYS = 7;   // เตือนล่วงหน้าไม่เกิน 7 วัน (รวมที่เลยกำหนดแล้ว)
+  let bellAutoOpened = false;
+
+  function daysLeftOf(g) {
+    if (!g.created || !g.days) return null;
+    const dl = new Date(g.created + "T00:00:00"); dl.setDate(dl.getDate() + g.days);
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    return Math.ceil((dl - t0) / 86400000);
+  }
+  function computeDeadlineNotifications() {
+    const out = [];
+    Object.keys(goalsMap).forEach((fid) => {
+      const g = goalsMap[fid];
+      if (!g || !(g.target > 0)) return;
+      const total = g.lastTotal || 0;
+      if (total >= g.target) return;                      // ถึงเป้าแล้ว ไม่ต้องเตือน
+      const left = daysLeftOf(g);
+      if (left === null || left > NOTIFY_WITHIN_DAYS) return;   // ยังไม่ใกล้กำหนด
+      out.push({ fid, name: g.name || "(ไม่มีชื่อ)", left, total, target: g.target,
+                 pct: Math.min(100, Math.round((total / g.target) * 100)) });
+    });
+    out.sort((a, b) => a.left - b.left);                  // ด่วนสุด (เลยกำหนด/เหลือน้อย) ก่อน
+    return out;
+  }
+  function goToFolder(fid, name) {
+    pickerRoot = "mine";
+    pathStack = [rootEntry(), { id: fid, name: name || "โฟลเดอร์" }];
+    pushNav(writeBrowseState());   // ไปหน้า Writing เข้าโฟลเดอร์ของงานนั้น
+  }
+  function renderBell() {
+    const badge = $("bellBadge"), list = $("bellList");
+    if (!badge || !list) return;
+    if (!G() || !G().isConnected()) {
+      badge.hidden = true;
+      list.innerHTML = `<div class="bell-empty">เชื่อมต่อ Google เพื่อดูการแจ้งเตือน</div>`;
+      return;
+    }
+    const items = computeDeadlineNotifications();
+    if (items.length) { badge.textContent = items.length; badge.hidden = false; }
+    else { badge.hidden = true; }
+    if (!items.length) {
+      list.innerHTML = `<div class="bell-empty">ยังไม่มีเรื่องใกล้ถึงกำหนด 🎉</div>`;
+      return;
+    }
+    list.innerHTML = items.map((it) => {
+      const overdue = it.left <= 0;
+      const dayTxt = it.left === 0 ? "ครบกำหนดวันนี้"
+        : it.left < 0 ? `เลยกำหนด ${Math.abs(it.left)} วัน`
+        : `เหลือ ${it.left} วัน`;
+      return `<button class="bell-item" data-fid="${esc(it.fid)}" data-name="${esc(it.name)}">
+        <div class="bell-item-top"><span class="bell-item-name">${esc(it.name)}</span><span class="bell-item-days${overdue ? " overdue" : ""}">${dayTxt}</span></div>
+        <div class="bell-item-meta">${it.pct}% · ${it.total.toLocaleString()} / ${it.target.toLocaleString()} คำ</div>
+        <div class="bell-item-bar"><div style="width:${it.pct}%"></div></div>
+      </button>`;
+    }).join("");
+    list.querySelectorAll(".bell-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        $("bellMenu").hidden = true;
+        goToFolder(el.dataset.fid, el.dataset.name);
+      });
+    });
+  }
+  // แจ้งเตือนอัตโนมัติครั้งแรกหลังล็อกอิน ถ้ามีเรื่องใกล้กำหนด
+  function maybeAutoOpenBell() {
+    if (bellAutoOpened) return;
+    if (computeDeadlineNotifications().length) {
+      bellAutoOpened = true;
+      renderBell();
+      if ($("bellMenu")) $("bellMenu").hidden = false;
+    }
+  }
+  if ($("bellBtn")) $("bellBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const m = $("bellMenu");
+    renderBell();
+    m.hidden = !m.hidden;
+  });
+  document.addEventListener("click", (e) => {
+    if ($("bellMenu") && !$("bellMenu").hidden && !e.target.closest("#bellWrap")) $("bellMenu").hidden = true;
+  });
+
   /* ---------- เมื่อเชื่อมต่อ Google สำเร็จ ---------- */
   window.UI = {
     onConnected: () => {
@@ -1020,6 +1158,8 @@
           renderGoalForFolder();
           if ($("view-dashboard").classList.contains("active")) renderDashGoals();
           backfillGoalNames();   // เป้าเดิมที่ยังไม่มีชื่อ → ดึงชื่อโฟลเดอร์มาเติม
+          renderBell();          // อัปเดตกระดิ่งแจ้งเตือน
+          maybeAutoOpenBell();   // ล็อกอินมาปุ๊บ เด้งแจ้งเตือนถ้ามีเรื่องใกล้กำหนด
         }).catch((e) => console.error("loadGoals:", e));
       }
       if ($("view-write").classList.contains("active") && $("writeEditor").hidden) showWritePicker();

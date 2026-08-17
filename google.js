@@ -189,12 +189,28 @@
   }
 
   /* ---------- Docs: เปิด / บันทึก ---------- */
-  function parseDoc(doc) {
+  // แผ่แท็บทั้งหมดในเอกสารเป็นลิสต์เรียงลำดับ (รองรับแท็บซ้อนกัน childTabs)
+  function flattenTabs(doc) {
+    const out = [];
+    const walk = (arr, depth) => {
+      (arr || []).forEach((t) => {
+        const props = t.tabProperties || {};
+        if (t.documentTab && t.documentTab.body) {
+          out.push({ tabId: props.tabId || null, title: props.title || "แท็บ", depth, body: t.documentTab.body });
+        }
+        if (t.childTabs && t.childTabs.length) walk(t.childTabs, depth + 1);
+      });
+    };
+    walk(doc.tabs, 0);
+    return out;
+  }
+
+  function parseBody(body) {
     let text = "";
     const ranges = [];   // ช่วงตัวหนา
     const italics = [];  // ช่วงตัวเอียง
     const aligns = [];   // align ต่อย่อหน้า (1 ย่อหน้า = 1 บรรทัด)
-    (doc.body.content || []).forEach((el) => {
+    ((body && body.content) || []).forEach((el) => {
       if (el.paragraph) {
         const ps = el.paragraph.paragraphStyle || {};
         aligns.push(ps.alignment === "CENTER" ? "center" : "left");
@@ -229,27 +245,49 @@
     return { text, ranges, italics, aligns, normalized: false };
   }
 
+  // เปิดเอกสาร: ดึงเนื้อหาแบบรวมทุกแท็บ แล้วคืนลิสต์แท็บ (แต่ละแท็บ parse แล้ว)
   async function openDoc(fileId) {
-    const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}`);
-    return normalizeBold(parseDoc(doc));
+    const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}?includeTabsContent=true`);
+    let tabs = flattenTabs(doc);
+    if (!tabs.length) tabs = [{ tabId: null, title: "เอกสาร", depth: 0, body: doc.body || { content: [] } }];
+    const parsed = tabs.map((t) => {
+      const p = normalizeBold(parseBody(t.body));
+      return { tabId: t.tabId, title: t.title, depth: t.depth,
+               text: p.text, ranges: p.ranges, italics: p.italics, aligns: p.aligns, normalized: p.normalized };
+    });
+    return { tabs: parsed, activeTabId: parsed[0].tabId, multiTab: parsed.length > 1 };
   }
-  async function saveDoc(fileId, text, ranges, aligns, italics) {
-    const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}`);
-    const content = doc.body.content || [];
+
+  // บันทึกกลับเข้าแท็บที่ระบุ (tabId) — ถ้าไม่ระบุ ใช้แท็บแรก
+  async function saveDoc(fileId, text, ranges, aligns, italics, tabId) {
+    const doc = await apiFetch(`https://docs.googleapis.com/v1/documents/${fileId}?includeTabsContent=true`);
+    const tabs = flattenTabs(doc);
+    let content;
+    if (tabs.length) {
+      const t = (tabId && tabs.find((x) => x.tabId === tabId)) || tabs[0];
+      tabId = t.tabId;                       // ยึด tabId จริงจากเอกสาร
+      content = (t.body && t.body.content) || [];
+    } else {
+      tabId = null;                          // เอกสารเก่าไม่มีโครงสร้างแท็บ
+      content = (doc.body && doc.body.content) || [];
+    }
     const endIndex = content.length ? content[content.length - 1].endIndex : 1;
+    // ใส่ tabId ลงใน range/location เพื่อเจาะจงแท็บ (ถ้ามี)
+    const range = (s, e) => (tabId ? { startIndex: s, endIndex: e, tabId } : { startIndex: s, endIndex: e });
+    const loc = (i) => (tabId ? { index: i, tabId } : { index: i });
     const requests = [];
     if (endIndex - 1 > 1) {
-      requests.push({ deleteContentRange: { range: { startIndex: 1, endIndex: endIndex - 1 } } });
+      requests.push({ deleteContentRange: { range: range(1, endIndex - 1) } });
     }
     if (text && text.length > 0) {
       const L = text.length;
-      requests.push({ insertText: { location: { index: 1 }, text } });
+      requests.push({ insertText: { location: loc(1), text } });
 
       // 1) base style ทั้งก้อน: ฟอนต์ Calibri 12 + ล้างตัวหนา/ตัวเอียงเป็น false
       //    (สำคัญ: ล้าง bold/italic ทั้งหมดก่อน ไม่งั้นข้อความที่แทรกจะ inherit มาทั้งไฟล์)
       requests.push({
         updateTextStyle: {
-          range: { startIndex: 1, endIndex: 1 + L },
+          range: range(1, 1 + L),
           textStyle: {
             weightedFontFamily: { fontFamily: DOC_FONT },
             fontSize: { magnitude: DOC_FONT_SIZE, unit: "PT" },
@@ -263,29 +301,21 @@
       // 2) ตัวหนาเฉพาะช่วงที่ผู้ใช้ทำตัวหนาในเว็บ
       (ranges || []).forEach(([s, e]) => {
         requests.push({
-          updateTextStyle: {
-            range: { startIndex: 1 + s, endIndex: 1 + e },
-            textStyle: { bold: true },
-            fields: "bold",
-          },
+          updateTextStyle: { range: range(1 + s, 1 + e), textStyle: { bold: true }, fields: "bold" },
         });
       });
 
       // 2.1) ตัวเอียงเฉพาะช่วงที่ผู้ใช้ทำตัวเอียงในเว็บ
       (italics || []).forEach(([s, e]) => {
         requests.push({
-          updateTextStyle: {
-            range: { startIndex: 1 + s, endIndex: 1 + e },
-            textStyle: { italic: true },
-            fields: "italic",
-          },
+          updateTextStyle: { range: range(1 + s, 1 + e), textStyle: { italic: true }, fields: "italic" },
         });
       });
 
       // 3) ย่อหน้าทั้งหมด: line spacing 1.15 + ช่องว่างหลังย่อหน้า + จัดชิดซ้าย (reset)
       requests.push({
         updateParagraphStyle: {
-          range: { startIndex: 1, endIndex: 1 + L },
+          range: range(1, 1 + L),
           paragraphStyle: {
             lineSpacing: DOC_LINE_SPACING,
             spaceBelow: { magnitude: DOC_SPACE_BELOW_PT, unit: "PT" },
@@ -306,7 +336,7 @@
             const len = ln.length > 0 ? ln.length : 1;
             requests.push({
               updateParagraphStyle: {
-                range: { startIndex: 1 + start, endIndex: 1 + start + len },
+                range: range(1 + start, 1 + start + len),
                 paragraphStyle: { alignment: "CENTER" },
                 fields: "alignment",
               },

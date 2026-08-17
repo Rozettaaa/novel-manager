@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Novel Manager</title>
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=40">
 <script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);var u=localStorage.getItem('wt_ui');if(!u)u=(window.innerWidth<=768?'mobile':'desktop');document.documentElement.setAttribute('data-ui',u);}catch(e){}</script>
 </head>
 <body>
@@ -42,8 +42,19 @@
   <!-- ============ MAIN ============ -->
   <main class="content">
 
-    <!-- headbar: หัวข้อของเมนูปัจจุบัน -->
-    <header class="headbar"><h1 id="headbarTitle">Writing</h1></header>
+    <!-- headbar: หัวข้อของเมนูปัจจุบัน + กระดิ่งแจ้งเตือน -->
+    <header class="headbar" id="headbar">
+      <h1 id="headbarTitle">Writing</h1>
+      <div class="bell-wrap" id="bellWrap">
+        <button id="bellBtn" class="bell-btn" title="การแจ้งเตือน" aria-label="การแจ้งเตือน">
+          🔔<span id="bellBadge" class="bell-badge" hidden>0</span>
+        </button>
+        <div id="bellMenu" class="bell-menu" hidden>
+          <div class="bell-head">การแจ้งเตือน · เรื่องใกล้ถึงกำหนด</div>
+          <div id="bellList" class="bell-list"></div>
+        </div>
+      </div>
+    </header>
 
     <!-- ---------- WRITE VIEW ---------- -->
     <section id="view-write" class="view active">
@@ -129,10 +140,14 @@
           </div>
         </div>
 
+        <!-- แถบสลับแท็บ (เฉพาะไฟล์ Google Doc ที่มีหลายแท็บ) -->
+        <div id="docTabs" class="doc-tabs" hidden></div>
+
         <div class="mini-stats">
           <span>คำ: <b id="wordCount">0</b></span>
           <span>ตัวอักษร: <b id="charCount">0</b></span>
           <span>เวลาวันนี้: <b id="minuteCount">0</b> นาที</span>
+          <span id="allTabsStat" class="all-tabs-stat" hidden>คำทั้งไฟล์ (ทุกแท็บ): <b id="wordCountAll">0</b></span>
           <span class="mini-stats-actions">
             <button id="fileStatsBtn" class="ghost-btn small">📊 สถิติไฟล์นี้</button>
             <button id="sprintBtn" class="ghost-btn small">⏱ ตั้งเป้าเขียน</button>
@@ -350,11 +365,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=36"></script>
-<script src="app.js?v=36"></script>
-<script src="google.js?v=36"></script>
-<script src="ui.js?v=36"></script>
-<script src="random-data.js?v=36"></script>
-<script src="random.js?v=36"></script>
+<script src="config.js?v=40"></script>
+<script src="app.js?v=40"></script>
+<script src="google.js?v=40"></script>
+<script src="ui.js?v=40"></script>
+<script src="random-data.js?v=40"></script>
+<script src="random.js?v=40"></script>
 </body>
 </html>
