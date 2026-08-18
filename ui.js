@@ -613,11 +613,29 @@
      หน้าต่างลอยอยู่เหนือทุกอย่าง เขียนต่อได้แม้สลับแท็บ/ไปทำอย่างอื่น + ปรับขนาดได้ */
   let pipEditor = null, pipStatus = null, pipDocTabs = null, pipCount = null,
       pipEditorPH = null, pipStatusPH = null, pipDocTabsPH = null,
-      pipNote = null, pipWrap = null, pipTimer = null, pipTimerIv = null;
+      pipNote = null, pipWrap = null, pipTimer = null, pipTimerIv = null,
+      pipFoldBtn = null, pipFolded = false, pipPrevH = 0;
   function updatePipCount() {
     if (pipCount) pipCount.textContent = "คำ " + window.WT.getWords().toLocaleString();
   }
   if ($("editor")) $("editor").addEventListener("input", updatePipCount);
+  // พับหน้าต่างลอยเหลือแค่แถบบน (ย่อ) / ขยายกลับ
+  function togglePipFold() {
+    if (!pipWin) return;
+    pipFolded = !pipFolded;
+    if (pipFolded) {
+      pipPrevH = pipWin.outerHeight || 560;
+      if (pipEditor) pipEditor.style.display = "none";
+      if (pipDocTabs) pipDocTabs.style.display = "none";
+      try { pipWin.resizeTo(pipWin.outerWidth, 96); } catch (e) {}
+      if (pipFoldBtn) { pipFoldBtn.textContent = "▢"; pipFoldBtn.title = "ขยายหน้าต่างลอยกลับ"; }
+    } else {
+      if (pipEditor) pipEditor.style.display = "";
+      if (pipDocTabs) pipDocTabs.style.display = "";
+      try { pipWin.resizeTo(pipWin.outerWidth, pipPrevH || 560); } catch (e) {}
+      if (pipFoldBtn) { pipFoldBtn.textContent = "—"; pipFoldBtn.title = "พับหน้าต่างลอย (ย่อเหลือแถบเดียว)"; }
+    }
+  }
   function copyStylesToPip(win) {
     document.querySelectorAll('link[rel="stylesheet"], style').forEach((n) => {
       try { win.document.head.appendChild(n.cloneNode(true)); } catch (e) {}
@@ -662,6 +680,17 @@
     // ชิปจับเวลา (มิเรอร์จากแถบ sprint ในหน้าหลัก) — เล็กๆ ไม่กินพื้นที่เขียน
     pipTimer = doc.createElement("span"); pipTimer.className = "pip-timer"; pipTimer.hidden = true;
     bar.appendChild(pipTimer);
+    // ปุ่มพับหน้าต่าง (ย่อเหลือแถบเดียว) — เหมือนปุ่มย่อของหน้าต่างปกติ
+    pipFolded = false;
+    pipFoldBtn = doc.createElement("button");
+    pipFoldBtn.className = "tool-btn pip-fold"; pipFoldBtn.title = "พับหน้าต่างลอย (ย่อเหลือแถบเดียว)"; pipFoldBtn.textContent = "—";
+    pipFoldBtn.addEventListener("click", togglePipFold);
+    bar.appendChild(pipFoldBtn);
+    // ปุ่มกลับหน้าเต็ม (ปิดหน้าต่างลอย กลับไปเขียนในหน้าหลัก)
+    const back = doc.createElement("button");
+    back.className = "tool-btn pip-restore"; back.title = "กลับไปหน้าเต็ม (ปิดหน้าต่างลอย)"; back.textContent = "⤢";
+    back.addEventListener("click", () => closePip());
+    bar.appendChild(back);
     pipTimerIv = setInterval(() => {
       const sa = document.getElementById("sprintActive"), cd = document.getElementById("sprintCountdown");
       if (sa && !sa.hidden && cd) { pipTimer.hidden = false; pipTimer.textContent = "⏱ " + cd.textContent; }
@@ -695,10 +724,12 @@
     if (pipTimerIv) { clearInterval(pipTimerIv); pipTimerIv = null; }
     if (pipEditor && pipEditorPH && pipEditorPH.parentNode) {
       pipEditor.classList.remove("pip-surface");
+      pipEditor.style.display = "";   // เผื่อปิดตอนพับอยู่ → คืนให้แสดงปกติ
       pipEditorPH.parentNode.insertBefore(pipEditor, pipEditorPH);
       pipEditorPH.remove();
     }
     if (pipDocTabs && pipDocTabsPH && pipDocTabsPH.parentNode) {
+      pipDocTabs.style.display = "";
       pipDocTabsPH.parentNode.insertBefore(pipDocTabs, pipDocTabsPH);
       pipDocTabsPH.remove();
     }
@@ -709,6 +740,7 @@
     if (pipWrap) pipWrap.hidden = false;
     if (pipNote) { pipNote.remove(); pipNote = null; }
     if ($("pipBtn")) $("pipBtn").classList.remove("active");
+    pipFolded = false; pipFoldBtn = null;
     pipEditor = pipStatus = pipDocTabs = pipCount = pipEditorPH = pipStatusPH = pipDocTabsPH = pipWrap = pipTimer = null;
     const w = pipWin; pipWin = null;
     if (w) { try { w.close(); } catch (e) {} }
