@@ -94,9 +94,15 @@
   // เรนเดอร์ตาม state (ใช้ทั้งตอนนำทาง และตอนกด back/forward ของเบราว์เซอร์)
   function applyState(s) {
     curState = s;
-    if (typeof closePip === "function") closePip();   // เปลี่ยนหน้า → คืนกล่องเขียนจาก PiP กลับก่อน
-    // sprint อยู่เฉพาะหน้าเขียนไฟล์ — ออกไปหน้าอื่น (picker/dashboard) ให้ยกเลิก
-    if (window.WT && window.WT.cancelSprint && !(s && s.view === "write" && s.editing)) {
+    // ถ้าหน้าต่างลอยเปิดอยู่ ห้ามปิด — สลับหน้าไปมาได้โดยหน้าต่างลอยยังคงอยู่
+    // และเมื่อกลับมาหน้า Writing ให้คงสถานะ "กำลังเขียนในหน้าต่างลอย" (ไม่เด้งกลับ picker)
+    if (pipWin && (!s || s.view === "write")) {
+      domShowView("write");
+      if ($("writePicker")) $("writePicker").hidden = true;   // คง note ของหน้าต่างลอยไว้ ไม่โชว์ picker
+      return;
+    }
+    // sprint อยู่เฉพาะหน้าเขียนไฟล์ — ออกไปหน้าอื่นให้ยกเลิก (ยกเว้นกำลังเปิดหน้าต่างลอย)
+    if (window.WT && window.WT.cancelSprint && !pipWin && !(s && s.view === "write" && s.editing)) {
       window.WT.cancelSprint();
     }
     if (s && s.view === "random") {   // เมนู Random ใช้ได้โดยไม่ต้องต่อ Google

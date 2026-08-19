@@ -689,10 +689,11 @@ html[data-ui="mobile"] .bell-menu { position: fixed; top: 60px; right: 10px; lef
 
 /* ============ แท็บภายในไฟล์ Google Doc (หลายแท็บ) ============ */
 .doc-tabs {
-  display: flex; gap: 6px; flex-wrap: wrap;
+  display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto;   /* แถวเดียว เลื่อนข้างได้ ไม่ห่อบรรทัด */
   padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg);
 }
 .doc-tab {
+  flex-shrink: 0;
   border: 1px solid var(--border); background: var(--bg); color: var(--muted);
   padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
   max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
