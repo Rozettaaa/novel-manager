@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Noto+Serif+Thai:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=52">
+<link rel="stylesheet" href="style.css?v=55">
 <script>try{var t=localStorage.getItem('wt_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);var u=localStorage.getItem('wt_ui');if(!u)u=(window.innerWidth<=768?'mobile':'desktop');document.documentElement.setAttribute('data-ui',u);}catch(e){}</script>
 </head>
 <body>
@@ -137,6 +137,7 @@
             <button id="boldBtn" class="tool-btn" title="ตัวหนา (Ctrl+B)"><b>B</b></button>
             <button id="italicBtn" class="tool-btn" title="ตัวเอียง (Ctrl+I)"><i>I</i></button>
             <button id="centerBtn" class="tool-btn" title="จัดกึ่งกลาง">≡</button>
+            <button id="noteBtn" class="tool-btn" title="โน้ตพล็อตของตอนนี้">📝</button>
             <button id="pipBtn" class="tool-btn" title="หน้าต่างลอย — เขียนต่อได้แม้ทำอย่างอื่น">🪟</button>
             <button id="downloadBtn" class="ghost-btn small">⬇ .docx</button>
             <button id="saveBtn" class="primary-btn" title="บันทึก (Ctrl+S)">💾 บันทึก</button>
@@ -352,6 +353,16 @@
     </div>
   </div>
 
+  <!-- ============ แผงโน้ตพล็อต (ลอย) — ใช้ได้ทั้งหน้าเต็มและหน้าต่างลอย ============ -->
+  <div id="notePanel" class="note-panel" hidden>
+    <div class="note-head">
+      <span class="note-title">📝 โน้ตพล็อต <span id="noteScope" class="note-scope"></span></span>
+      <span id="noteStatus" class="note-status"></span>
+      <button id="noteClose" class="ed-panel-close" title="ปิด">✕</button>
+    </div>
+    <textarea id="noteText" class="note-text" placeholder="จดพล็อต/ไอเดียของตอนนี้ไว้ดูระหว่างเขียน..."></textarea>
+  </div>
+
   <!-- ============ หน้าต่างเชื่อมต่อ Google ใหม่ (ตอน session หลุดระหว่างเขียน) ============ -->
   <div class="reconnect-modal" id="reconnectModal" hidden role="dialog" aria-label="เชื่อมต่อใหม่">
     <div class="reconnect-card">
@@ -371,8 +382,8 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js?v=48"></script>
 <script src="app.js?v=48"></script>
-<script src="google.js?v=48"></script>
-<script src="ui.js?v=52"></script>
+<script src="google.js?v=53"></script>
+<script src="ui.js?v=55"></script>
 <script src="random-data.js?v=48"></script>
 <script src="random.js?v=48"></script>
 </body>

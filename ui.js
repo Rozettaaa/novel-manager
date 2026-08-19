@@ -11,6 +11,7 @@
 
   let curFolderId = null, curFolderName = "", curFileId = null, curFileName = "";
   let curDocTabs = [], curTabId = null;   // แท็บภายในไฟล์ Google Doc (กรณีมีหลายแท็บ)
+  let notesMap = {}, curNoteKey = "";      // โน้ตพล็อตของไฟล์ปัจจุบัน { tabKey: text }
   let pickerRoot = "mine";   // 'mine' (ไดรฟ์ของฉัน) | 'shared' (แชร์กับฉัน)
   let pathStack = [];        // เส้นทางโฟลเดอร์ปัจจุบัน [{id, name}]
   let pickerDetail = false;  // false = ไอคอน, true = รายละเอียด (ชื่อเต็ม)
@@ -556,6 +557,13 @@
       $("fileTitle").textContent = fileName;
       renderDocTabs();                                 // แถบสลับแท็บ (โชว์เมื่อมีมากกว่า 1 แท็บ)
       recomputeOtherTabsWords(); updateAllTabsWordCount();   // สถิติ "คำทั้งไฟล์"
+      // โน้ตพล็อต: รีเซ็ต + ปิดแผง แล้วโหลดของไฟล์นี้จากชีต
+      notesMap = {}; showNoteForTab();
+      if ($("notePanel")) $("notePanel").hidden = true;
+      if ($("noteBtn")) $("noteBtn").classList.remove("active");
+      if (G() && G().isConnected() && G().loadNotes) {
+        G().loadNotes(fileId).then((m) => { notesMap = m || {}; showNoteForTab(); }).catch((e) => console.error("loadNotes:", e));
+      }
       renderEditorFolderGoal(cur.id, cur.name);
       // จำไฟล์ที่เพิ่งเปิด ไว้แสดงใน "เปิดล่าสุด" บนหน้าแรก
       pushRecentFile({ fileId, fileName, folderId: cur.id, folderName: cur.name, root: pickerRoot });
@@ -605,11 +613,95 @@
     if (window.WT.isDirty && window.WT.isDirty()) {
       if (!confirm("ยังมีการแก้ไขที่ยังไม่ได้บันทึกในแท็บนี้\nสลับแท็บโดยไม่บันทึกหรือไม่?")) return;
     }
+    saveCurrentNote();          // บันทึกโน้ตแท็บเดิมก่อนสลับ
     curTabId = t.tabId;
     window.WT.loadTab(t.text, t.ranges, t.aligns, t.italics);
     renderDocTabs();
+    showNoteForTab();           // โหลดโน้ตของแท็บใหม่
     recomputeOtherTabsWords(); updateAllTabsWordCount(); updatePipCount();   // สลับแท็บ → คำนวณคำใหม่
   }
+
+  /* ---------- โน้ตพล็อต (ต่อแท็บ/ตอน — เก็บใน Google Sheet) ---------- */
+  let noteSaveTimer = null;
+  function noteStatus(msg) { if ($("noteStatus")) $("noteStatus").textContent = msg || ""; }
+  function showNoteForTab() {
+    curNoteKey = curTabId || "";
+    if ($("noteText")) $("noteText").value = notesMap[curNoteKey] || "";
+    if ($("noteScope")) {
+      const t = (curDocTabs || []).find((x) => (x.tabId || "") === curNoteKey);
+      $("noteScope").textContent = (curDocTabs && curDocTabs.length > 1 && t) ? "· " + (t.title || "") : "";
+    }
+    noteStatus("");
+  }
+  function saveCurrentNote() {
+    clearTimeout(noteSaveTimer);
+    if (!curFileId || !$("noteText")) return;
+    const t = $("noteText").value;
+    notesMap[curNoteKey] = t;
+    if (G() && G().isConnected() && G().saveNote) {
+      noteStatus("กำลังบันทึก...");
+      G().saveNote(curFileId, curNoteKey || null, t)
+        .then(() => noteStatus("บันทึกแล้ว"))
+        .catch((e) => { console.error("saveNote:", e); noteStatus("บันทึกไม่สำเร็จ"); });
+    } else {
+      noteStatus("เชื่อมต่อ Google เพื่อบันทึกโน้ต");
+    }
+  }
+  function scheduleNoteSave() {
+    noteStatus("กำลังพิมพ์...");
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(saveCurrentNote, 900);
+  }
+  // ยึดตำแหน่งด้วย left/top (จากเดิม right/bottom) เพื่อให้ลากมุมขวาล่างปรับขนาดได้ตามปกติ
+  function anchorNoteTopLeft() {
+    const p = $("notePanel");
+    if (!p || p.hidden) return;
+    const r = p.getBoundingClientRect();
+    p.style.left = r.left + "px"; p.style.top = r.top + "px";
+    p.style.right = "auto"; p.style.bottom = "auto";
+  }
+  function toggleNote() {
+    const p = $("notePanel");
+    if (!p) return;
+    p.hidden = !p.hidden;
+    if ($("noteBtn")) $("noteBtn").classList.toggle("active", !p.hidden);
+    if (!p.hidden) { anchorNoteTopLeft(); if ($("noteText")) $("noteText").focus(); }
+  }
+  if ($("noteBtn")) $("noteBtn").addEventListener("click", toggleNote);
+  if ($("noteClose")) $("noteClose").addEventListener("click", () => { if ($("notePanel")) { $("notePanel").hidden = true; if ($("noteBtn")) $("noteBtn").classList.remove("active"); } });
+  if ($("noteText")) $("noteText").addEventListener("input", scheduleNoteSave);
+  function resetNotePos() {
+    const p = $("notePanel");
+    if (p) { p.style.left = ""; p.style.top = ""; p.style.right = ""; p.style.bottom = ""; }
+  }
+  // ลากแผงโน้ตย้ายที่ได้ (จับที่หัวแผง) — ทำงานทั้งหน้าเต็มและหน้าต่างลอย
+  (function () {
+    const panel = $("notePanel");
+    const head = panel && panel.querySelector(".note-head");
+    if (!head) return;
+    head.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.target.closest("button")) return;   // ปุ่มปิดไม่นับเป็นลาก
+      const win = panel.ownerDocument.defaultView;
+      const rect = panel.getBoundingClientRect();
+      panel.style.left = rect.left + "px"; panel.style.top = rect.top + "px";
+      panel.style.right = "auto"; panel.style.bottom = "auto";
+      const sx = e.clientX, sy = e.clientY, L = rect.left, T = rect.top;
+      try { head.setPointerCapture(e.pointerId); } catch (er) {}
+      const move = (ev) => {
+        const w = panel.offsetWidth, h = panel.offsetHeight;
+        const nl = Math.max(4, Math.min(L + ev.clientX - sx, win.innerWidth - w - 4));
+        const nt = Math.max(4, Math.min(T + ev.clientY - sy, win.innerHeight - h - 4));
+        panel.style.left = nl + "px"; panel.style.top = nt + "px";
+      };
+      const up = () => {
+        head.removeEventListener("pointermove", move);
+        head.removeEventListener("pointerup", up);
+        try { head.releasePointerCapture(e.pointerId); } catch (er) {}
+      };
+      head.addEventListener("pointermove", move);
+      head.addEventListener("pointerup", up);
+    });
+  })();
 
   // ปุ่มกลับในแอป → ใช้ history.back() ให้สอดคล้องกับปุ่ม back ของเบราว์เซอร์
   $("backBtn").addEventListener("click", () => history.back());
@@ -620,7 +712,8 @@
   let pipEditor = null, pipStatus = null, pipDocTabs = null, pipCount = null,
       pipEditorPH = null, pipStatusPH = null, pipDocTabsPH = null,
       pipNote = null, pipWrap = null, pipTimer = null, pipTimerIv = null,
-      pipFoldBtn = null, pipFolded = false, pipPrevH = 0;
+      pipFoldBtn = null, pipFolded = false, pipPrevH = 0,
+      pipNotePanel = null, pipNotePanelPH = null;
   function updatePipCount() {
     if (pipCount) pipCount.textContent = "คำ " + window.WT.getWords().toLocaleString();
   }
@@ -686,6 +779,11 @@
     // ชิปจับเวลา (มิเรอร์จากแถบ sprint ในหน้าหลัก) — เล็กๆ ไม่กินพื้นที่เขียน
     pipTimer = doc.createElement("span"); pipTimer.className = "pip-timer"; pipTimer.hidden = true;
     bar.appendChild(pipTimer);
+    // ปุ่มโน้ตพล็อต
+    const noteB = doc.createElement("button");
+    noteB.className = "tool-btn"; noteB.title = "โน้ตพล็อตของตอนนี้"; noteB.textContent = "📝";
+    noteB.addEventListener("click", toggleNote);
+    bar.appendChild(noteB);
     // ปุ่มพับหน้าต่าง (ย่อเหลือแถบเดียว) — เหมือนปุ่มย่อของหน้าต่างปกติ
     pipFolded = false;
     pipFoldBtn = doc.createElement("button");
@@ -715,6 +813,17 @@
     shell.appendChild(editor);            // พื้นที่เขียน
     doc.body.appendChild(shell);
 
+    // ย้ายแผงโน้ตเข้าหน้าต่างลอยด้วย (position:fixed → ลอยในหน้าต่างลอย)
+    const notePanel = $("notePanel");
+    if (notePanel) {
+      pipNotePanel = notePanel;
+      pipNotePanelPH = document.createComment("pip-notepanel");
+      notePanel.parentNode.insertBefore(pipNotePanelPH, notePanel);
+      notePanel.hidden = true;
+      doc.body.appendChild(notePanel);
+      resetNotePos();
+    }
+
     // หน้าหลัก: ซ่อนกล่องเขียนเดิม แสดงป้ายแทน
     wrap.hidden = true;
     pipNote = document.createElement("div");
@@ -743,11 +852,18 @@
       pipStatusPH.parentNode.insertBefore(pipStatus, pipStatusPH);
       pipStatusPH.remove();
     }
+    if (pipNotePanel && pipNotePanelPH && pipNotePanelPH.parentNode) {
+      pipNotePanel.hidden = true;
+      pipNotePanelPH.parentNode.insertBefore(pipNotePanel, pipNotePanelPH);   // คืนแผงโน้ตกลับ DOM หลัก
+      pipNotePanelPH.remove();
+      resetNotePos();
+    }
     if (pipWrap) pipWrap.hidden = false;
     if (pipNote) { pipNote.remove(); pipNote = null; }
     if ($("pipBtn")) $("pipBtn").classList.remove("active");
+    if ($("noteBtn")) $("noteBtn").classList.remove("active");
     pipFolded = false; pipFoldBtn = null;
-    pipEditor = pipStatus = pipDocTabs = pipCount = pipEditorPH = pipStatusPH = pipDocTabsPH = pipWrap = pipTimer = null;
+    pipEditor = pipStatus = pipDocTabs = pipCount = pipEditorPH = pipStatusPH = pipDocTabsPH = pipWrap = pipTimer = pipNotePanel = pipNotePanelPH = null;
     const w = pipWin; pipWin = null;
     if (w) { try { w.close(); } catch (e) {} }
   }

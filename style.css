@@ -735,3 +735,25 @@ html[data-ui="mobile"] .bell-menu { position: fixed; top: 60px; right: 10px; lef
   background: var(--panel);
 }
 .pip-note span { display: block; margin-top: 8px; font-size: 13px; font-weight: 400; color: var(--muted); }
+
+/* ============ แผงโน้ตพล็อต (ลอย ใช้ได้ทั้งหน้าเต็ม/หน้าต่างลอย) ============ */
+.note-panel {
+  position: fixed; right: 20px; bottom: 20px; z-index: 80;
+  width: 330px; height: 300px;
+  min-width: 220px; min-height: 120px;
+  max-width: calc(100vw - 24px); max-height: calc(100vh - 30px);
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 14px 44px rgba(20,22,40,.26);
+  overflow: hidden; resize: both;   /* ลากมุมขวาล่างเพื่อย่อ/ขยาย */
+}
+.note-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 14px; border-bottom: 1px solid var(--border); cursor: move; user-select: none; touch-action: none; }
+.note-head button { cursor: pointer; }
+.note-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-scope { color: var(--accent); font-weight: 600; }
+.note-status { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.note-text {
+  flex: 1; min-height: 40px; resize: none; border: none; outline: none;
+  padding: 12px 14px; font-family: var(--font-ui); font-size: 15px; line-height: 1.7;
+  background: transparent; color: var(--text); border-radius: 0 0 14px 14px;
+}

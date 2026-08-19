@@ -353,6 +353,7 @@
   /* ---------- Sheets: สถิติรายไฟล์ (ผูกกับบัญชี ข้ามเครื่องได้) ---------- */
   // schema: A=date B=folder_id C=file_id D=file_name E=word_count F=minutes
   let goalsTabReady = false;
+  let notesTabReady = false;
   let sheetVerified = false;
   async function ensureSheet() {
     let id = localStorage.getItem(sheetKey());
@@ -388,7 +389,7 @@
       "https://sheets.googleapis.com/v4/spreadsheets",
       jsonPost({
         properties: { title: CFG.SHEET_TITLE },
-        sheets: [{ properties: { title: "stats" } }, { properties: { title: "goals" } }],
+        sheets: [{ properties: { title: "stats" } }, { properties: { title: "goals" } }, { properties: { title: "notes" } }],
       })
     );
     id = ss.spreadsheetId;
@@ -401,7 +402,11 @@
       `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A1:H1?valueInputOption=RAW`,
       jsonPut({ values: [["folder_id", "target", "days", "created", "last_total", "last_counted", "folder_name", "pinned"]] })
     );
-    goalsTabReady = true;
+    await apiFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/notes!A1:D1?valueInputOption=RAW`,
+      jsonPut({ values: [["file_id", "tab_id", "note", "updated"]] })
+    );
+    goalsTabReady = true; notesTabReady = true;
     sheetVerified = true;
     return id;
   }
@@ -500,6 +505,73 @@
       await apiFetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/goals!A2?valueInputOption=RAW`,
         jsonPut({ values: remaining })
+      );
+    }
+  }
+
+  /* ---------- โน้ตพล็อต (ต่อไฟล์ + แท็บ) ---------- */
+  async function ensureNotesTab(spreadsheetId) {
+    if (notesTabReady) return;
+    const meta = await apiFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`
+    );
+    const has = (meta.sheets || []).some((s) => s.properties.title === "notes");
+    if (!has) {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        jsonPost({ requests: [{ addSheet: { properties: { title: "notes" } } }] })
+      );
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/notes!A1:D1?valueInputOption=RAW`,
+        jsonPut({ values: [["file_id", "tab_id", "note", "updated"]] })
+      );
+    }
+    notesTabReady = true;
+  }
+
+  // โหลดโน้ตทุกแท็บของไฟล์หนึ่ง → { tabKey: text }  (tabKey = tab_id หรือ "" ถ้าไม่มีแท็บ)
+  async function loadNotes(fileId) {
+    const id = await ensureSheet();
+    let data;
+    try {
+      data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/notes!A2:D`);
+      notesTabReady = true;
+    } catch (e) {
+      await ensureNotesTab(id);
+      return {};
+    }
+    const map = {};
+    (data && data.values || []).forEach((r) => {
+      if (r[0] === fileId) map[r[1] || ""] = r[2] || "";
+    });
+    return map;
+  }
+
+  // เซฟโน้ตของ (fileId, tabId) แบบต่อคิว (กันเขียนชนกัน)
+  let _noteSaveChain = Promise.resolve();
+  function saveNote(fileId, tabId, text) {
+    const run = () => _saveNote(fileId, tabId, text);
+    _noteSaveChain = _noteSaveChain.then(run, run);
+    return _noteSaveChain;
+  }
+  async function _saveNote(fileId, tabId, text) {
+    const id = await ensureSheet();
+    await ensureNotesTab(id);
+    const key = tabId || "";
+    const data = await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/notes!A2:D`);
+    const rows = (data && data.values) || [];
+    let rowNum = -1;
+    for (let i = 0; i < rows.length; i++) { if (rows[i][0] === fileId && (rows[i][1] || "") === key) { rowNum = i + 2; break; } }
+    const values = [[fileId, key, text || "", new Date().toISOString().slice(0, 10)]];
+    if (rowNum > 0) {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/notes!A${rowNum}:D${rowNum}?valueInputOption=RAW`,
+        jsonPut({ values })
+      );
+    } else {
+      await apiFetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/notes!A:D:append?valueInputOption=RAW`,
+        jsonPost({ values })
       );
     }
   }
@@ -616,7 +688,7 @@
   }
   async function switchAccount() {
     accessToken = null; connected = false; currentEmail = null;
-    sheetVerified = false; goalsTabReady = false;
+    sheetVerified = false; goalsTabReady = false; notesTabReady = false;
     try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(sheetKey()); } catch (e) {}
     setStatus("กำลังเปลี่ยนบัญชี...");
     await connect("select_account");
@@ -632,6 +704,7 @@
     openDoc, saveDoc,
     upsertStat, getTodayMinutes, getFolderStats, getFileStats,
     loadGoals, saveGoalRow, deleteGoalRow,
+    loadNotes, saveNote,
   };
 
   document.addEventListener("DOMContentLoaded", () => {
